@@ -1,5 +1,5 @@
 from typing import Any
-from mcp.server.fastmcp import FastMCP
+from fastmcp import FastMCP
 from nba_api.stats.endpoints import scoreboardv2, boxscoretraditionalv2, boxscorefourfactorsv2, playbyplayv2, leaguegamefinder, playergamelog, playercareerstats, leaguedashplayerstats
 from nba_api.stats.static import players
 from nba_api.live.nba.endpoints import scoreboard as live_scoreboard
