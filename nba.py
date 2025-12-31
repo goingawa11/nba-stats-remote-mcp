@@ -427,7 +427,11 @@ if __name__ == "__main__":
     print(f"PORT: {os.getenv('PORT', 'not set')}")
 
     # Use HTTP transport for remote deployment, stdio for local
-    transport = os.getenv("MCP_TRANSPORT", "stdio")
+    # Default to HTTP if PORT is set (Railway sets PORT automatically)
+    if os.getenv("PORT"):
+        transport = os.getenv("MCP_TRANSPORT", "http")  # Default to http when PORT exists
+    else:
+        transport = os.getenv("MCP_TRANSPORT", "stdio")
 
     if transport == "http":
         # Remote server mode
