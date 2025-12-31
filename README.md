@@ -36,13 +36,12 @@ A remote MCP (Model Context Protocol) server that gives Claude access to real-ti
 | Tool | Description |
 |------|-------------|
 | `get_todays_scores` | Live scores for today's games |
-| `get_recent_scores` | Scores for games on a specific date |
+| `get_recent_scores` | Scores for games on a specific date (returns game IDs) |
+| `get_box_score` | Full box score for a game (use game_id from get_recent_scores) |
+| `get_play_by_play` | Play-by-play data for a game (use game_id from get_recent_scores) |
 | `get_player_game_log` | A player's recent game-by-game stats |
 | `get_player_season_stats` | A player's season totals and averages |
 | `get_league_leaders` | League leaders with extensive filters (position, conference, college, etc.) |
-| `get_full_breakdown` | Full box score stats for all players in a game |
-| `get_four_factors` | Four factors analysis for games |
-| `get_play_by_play` | Play-by-play data for a specific game |
 
 ## Example Queries
 
@@ -50,7 +49,11 @@ A remote MCP (Model Context Protocol) server that gives Claude access to real-ti
 > "What are today's NBA scores?"
 
 **Historical Scores:**
-> "What were the scores on Christmas Day 2025?"
+> "What were the scores on December 30, 2025?"
+
+**Box Scores:**
+> "Show me the box score for the Lakers vs Pistons game on December 30"
+> (Claude will first call get_recent_scores to find the game_id, then get_box_score)
 
 **Player Stats:**
 > "Show me Jayson Tatum's last 15 games"
