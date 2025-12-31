@@ -9,6 +9,14 @@ import pandas as pd
 mcp = FastMCP("nba")
 pd.set_option('display.max_rows', None)
 
+# Health check endpoint for Railway
+from starlette.responses import PlainTextResponse
+from starlette.requests import Request
+
+@mcp.custom_route("/", methods=["GET"])
+async def health_check(request: Request) -> PlainTextResponse:
+    return PlainTextResponse("NBA MCP Server is running!")
+
 def get_game_ids(game_date: str = None) -> set:
     if(game_date is None):
         s = scoreboardv2.ScoreboardV2(day_offset=-1)

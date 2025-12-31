@@ -3,3 +3,4 @@ mcp[cli]>=1.6.0
 nba-api>=1.9.0
 pandas
 fastmcp>=2.0.0
+starlette
