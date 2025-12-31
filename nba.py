@@ -57,75 +57,9 @@ def filter_to_full_columns(game: Any) -> Any:
     return game[['PLAYER_NAME', 'TEAM_CITY', 'PTS', 'REB', 'AST', 'STL', 'BLK', 'TO', 'PLUS_MINUS', 'MIN']]
 
 
-@mcp.tool()
-async def get_game_ids_tool() -> str:
-    """Get the game IDs for all the games that happened yesterday."""
-    return get_game_ids()
-
-@mcp.tool()
-async def get_game_scores(game_date=None, game_filter=None, claude_summary=False) -> list:
-    """Get the score for a all games, that happened on a date, if no date is provided it gets the score of all games that happened yesterday.
-    No matter how the date is provided claude must format it to be 'yyyy/mm/dd' when it passes it into get game ids. 
-    It should be of the format Team 1: Score 1 - Team 2: Score 2. 
-    It should take the team name and return the full name, for example if dict 1 item is Memphis it would be great if it could return Memphis Grizzlies
-    It can take an optional game title, for example 'Memphis Grizzlies game' or 'lakers game', in which case it should only return the score for that game. 
-    It can take an optional boolean, claude_summary, if this is false claude should only provide the scores and no other information, if it is true claude should give a little blurb."""
-    game_scores = []
-    for game_id in get_game_ids(game_date):
-        game_scores.append(get_final_score(get_game_box_score(game_id)))
-
-    return game_scores
-
-@mcp.tool()
-async def get_four_factors(game_filter=None, table_view=False, claude_summary=False) -> dict:
-    """Get the score for all games that happened yesterday. 
-    It should start with a bolded title of the two teams that played, for example Memphis Grizzles - Los Angles Lakers and then list the four factors underneath. 
-    It can take an optional game title, for example 'Memphis Grizzlies game' or 'lakers game', in which case it should only return the four factors for that game.'
-    It can take the option to display the data in a table view as well.
-    It can take an optional boolean, claude_summary, if this is false claude should only provide the scores and no other information, if it is true claude should give a little blurb."""
-    game_ids = get_game_ids()
-    four_factors = []
-
-    for game_id in game_ids:
-        game = boxscorefourfactorsv2.BoxScoreFourFactorsV2(game_id=game_id).get_dict()['resultSets'][1]
-        dataframe = pd.DataFrame(game['rowSet'], columns = game['headers'])
-        filtered_dictionary = {}
-        for index, row in dataframe.iterrows():
-            filtered_dictionary[row['TEAM_ABBREVIATION']] = [row['EFG_PCT'], row['FTA_RATE'], row['TM_TOV_PCT'], row['OREB_PCT']]
-        four_factors.append(filtered_dictionary)
-
-    return four_factors
-
-@mcp.tool()
-async def get_pra_breakdown(game_date=None, game_filter=None, table_view=False, claude_summary=False) -> list:
-    """Get the points rebounds and assists for all players that played in all games that happened yesterday. 
-    It should start with a bolded title of the two teams that played, for example Memphis Grizzles - Los Angles Lakers and then list the four factors underneath. 
-    It can take an optional game title, for example 'Memphis Grizzlies game' or 'lakers game', in which case it should only return the four factors for that game.'
-    It can take the option to display the data in a table view as well, if it is a table view it should be two tables, one for each team.
-    It can take an optional game date, which would be the day the games happened on. If it is not provided then we will fetch yesterdays games. No matter how the date is provided claude must format it to be 'yyyy/mm/dd' when it passes it into get game ids. 
-    It can take an optional boolean, claude_summary, if this is false claude should only provide the scores and no other information, if it is true claude should give a little blurb."""
-    games = []
-    for game_id in get_game_ids(game_date):
-        game = filter_to_pra_columns(get_game_box_score(game_id)).to_csv()
-        games.append(game)
-
-    return games
-
-@mcp.tool()
-async def get_full_breakdown(game_date=None, game_filter=None, table_view=False, claude_summary=False) -> list:
-    """Returns the points rebounds, assists steals, blocks, plus minus, turn overs, personal fouls played for all players that played in all games that happened yesterday. 
-    It should start with a bolded title of the two teams that played, for example Memphis Grizzles - Los Angles Lakers and then list the four factors underneath. 
-    It can take an optional game title, for example 'Memphis Grizzlies game' or 'lakers game', in which case it should only return the four factors for that game.'
-    It can take the option to display the data in a table view as well - defaults as False, if it is a table view it should be two tables, one for each team.
-    It can take an optional boolean, claude_summary - DEFAULTS TO False, if this is false claude should only provide the scores and no other information, no notes or anything, if it is true claude should give a little blurb.
-    It can take an optional game date, which would be the day the games happened on. If it is not provided then we will fetch yesterdays games. No matter how the date is provided claude must format it to be 'yyyy/mm/dd' when it passes it into get game ids. 
-    """
-    games = []
-    for game_id in get_game_ids(game_date):
-        game = filter_to_full_columns(get_game_box_score(game_id)).to_csv()
-        games.append(game)
-
-    return games
+# Note: The old tools (get_game_ids_tool, get_game_scores, get_four_factors, get_pra_breakdown, get_full_breakdown)
+# have been removed because they relied on scoreboardv2 which doesn't have 2025-26 season data.
+# Use get_recent_scores + get_box_score instead for current season data.
 
 @mcp.tool()
 async def get_recent_scores(game_date: str, claude_summary=False) -> list:
@@ -406,12 +340,94 @@ async def get_league_leaders(
 
     return results
 
-#This is still a WIP
+@mcp.tool()
+async def get_box_score(game_id: str) -> list:
+    """Get the full box score for a specific game by game ID.
+    Use get_recent_scores first to find the game_id for a specific game.
+    Args:
+        game_id: The NBA game ID (e.g., '0022500460')
+    Returns full player stats including points, rebounds, assists, steals, blocks, turnovers, and minutes."""
+    try:
+        box = boxscoretraditionalv2.BoxScoreTraditionalV2(game_id=game_id)
+        data = box.get_dict()
+
+        # Get player stats (first resultSet)
+        player_stats = data['resultSets'][0]
+        df = pd.DataFrame(player_stats['rowSet'], columns=player_stats['headers'])
+
+        if df.empty:
+            return [{"error": f"No box score data found for game {game_id}"}]
+
+        results = []
+        for _, row in df.iterrows():
+            results.append({
+                'player': row['PLAYER_NAME'],
+                'team': row['TEAM_ABBREVIATION'],
+                'team_city': row['TEAM_CITY'],
+                'position': row['START_POSITION'] if row['START_POSITION'] else 'Bench',
+                'min': row['MIN'],
+                'pts': int(row['PTS']) if pd.notna(row['PTS']) else 0,
+                'reb': int(row['REB']) if pd.notna(row['REB']) else 0,
+                'ast': int(row['AST']) if pd.notna(row['AST']) else 0,
+                'stl': int(row['STL']) if pd.notna(row['STL']) else 0,
+                'blk': int(row['BLK']) if pd.notna(row['BLK']) else 0,
+                'tov': int(row['TO']) if pd.notna(row['TO']) else 0,
+                'pf': int(row['PF']) if pd.notna(row['PF']) else 0,
+                'plus_minus': row['PLUS_MINUS'],
+                'fg': f"{int(row['FGM']) if pd.notna(row['FGM']) else 0}-{int(row['FGA']) if pd.notna(row['FGA']) else 0}",
+                'fg_pct': row['FG_PCT'],
+                'fg3': f"{int(row['FG3M']) if pd.notna(row['FG3M']) else 0}-{int(row['FG3A']) if pd.notna(row['FG3A']) else 0}",
+                'fg3_pct': row['FG3_PCT'],
+                'ft': f"{int(row['FTM']) if pd.notna(row['FTM']) else 0}-{int(row['FTA']) if pd.notna(row['FTA']) else 0}",
+                'ft_pct': row['FT_PCT']
+            })
+
+        return results
+    except Exception as e:
+        return [{"error": f"Failed to get box score: {str(e)}"}]
+
 @mcp.tool()
 async def get_play_by_play(game_id: str) -> list:
-    "Returns the play by play data from a game, Claude should serve this an easy to read format but it should serve the full data, it should not shorten it in any way"
-    pbp = get_play_by_play_data(game_id)
-    return pbp.to_csv()
+    """Returns the play by play data from a game.
+    Use get_recent_scores first to find the game_id.
+    Args:
+        game_id: The NBA game ID (e.g., '0022500460')"""
+    try:
+        pbp = playbyplayv2.PlayByPlayV2(game_id=game_id)
+        data = pbp.get_dict()
+
+        plays_data = data['resultSets'][0]
+        df = pd.DataFrame(plays_data['rowSet'], columns=plays_data['headers'])
+
+        if df.empty:
+            return [{"error": f"No play-by-play data found for game {game_id}"}]
+
+        results = []
+        for _, row in df.iterrows():
+            play = {
+                'period': row['PERIOD'],
+                'time': row['PCTIMESTRING'],
+                'score': row['SCORE'],
+                'margin': row['SCOREMARGIN']
+            }
+            # Add description based on which team made the play
+            if pd.notna(row['HOMEDESCRIPTION']) and row['HOMEDESCRIPTION']:
+                play['description'] = row['HOMEDESCRIPTION']
+                play['team'] = 'HOME'
+            elif pd.notna(row['VISITORDESCRIPTION']) and row['VISITORDESCRIPTION']:
+                play['description'] = row['VISITORDESCRIPTION']
+                play['team'] = 'AWAY'
+            elif pd.notna(row['NEUTRALDESCRIPTION']) and row['NEUTRALDESCRIPTION']:
+                play['description'] = row['NEUTRALDESCRIPTION']
+                play['team'] = 'NEUTRAL'
+            else:
+                continue  # Skip empty plays
+
+            results.append(play)
+
+        return results
+    except Exception as e:
+        return [{"error": f"Failed to get play-by-play: {str(e)}"}]
 
 
 if __name__ == "__main__":
