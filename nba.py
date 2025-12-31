@@ -416,13 +416,24 @@ async def get_play_by_play(game_id: str) -> list:
 
 if __name__ == "__main__":
     import os
+    import sys
+
+    # Force unbuffered output for Railway logs
+    sys.stdout.reconfigure(line_buffering=True)
+
+    print("NBA MCP Server starting...")
+    print(f"Python version: {sys.version}")
+    print(f"MCP_TRANSPORT: {os.getenv('MCP_TRANSPORT', 'not set')}")
+    print(f"PORT: {os.getenv('PORT', 'not set')}")
+
     # Use HTTP transport for remote deployment, stdio for local
     transport = os.getenv("MCP_TRANSPORT", "stdio")
 
     if transport == "http":
         # Remote server mode
         port = int(os.getenv("PORT", 8080))
-        print(f"Starting NBA MCP server on port {port}...")
+        print(f"Starting HTTP server on 0.0.0.0:{port}...")
+        sys.stdout.flush()
         mcp.run(
             transport="streamable-http",
             host="0.0.0.0",
@@ -430,4 +441,5 @@ if __name__ == "__main__":
         )
     else:
         # Local mode (default)
+        print("Starting in stdio mode...")
         mcp.run(transport='stdio')
