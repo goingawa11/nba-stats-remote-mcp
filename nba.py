@@ -1,6 +1,6 @@
 from typing import Any
 from fastmcp import FastMCP
-from nba_api.stats.endpoints import scoreboardv2, boxscoretraditionalv2, boxscorefourfactorsv2, playbyplayv2, leaguegamefinder, playergamelog, playercareerstats, leaguedashplayerstats
+from nba_api.stats.endpoints import scoreboardv2, boxscoretraditionalv2, boxscorefourfactorsv2, playbyplayv2, leaguegamefinder, playergamelog, playercareerstats, leaguedashplayerstats, leaguedashteamstats
 from nba_api.stats.static import players
 from nba_api.live.nba.endpoints import scoreboard as live_scoreboard
 import pandas as pd
@@ -385,6 +385,123 @@ async def get_box_score(game_id: str) -> list:
         return results
     except Exception as e:
         return [{"error": f"Failed to get box score: {str(e)}"}]
+
+@mcp.tool()
+async def get_team_stats(
+    season: str = '2025-26',
+    season_type: str = 'Regular Season',
+    measure_type: str = 'Advanced',
+    per_mode: str = 'PerGame',
+    conference: str = None,
+    division: str = None,
+    top_n: int = 30,
+    sort_by: str = 'NET_RATING'
+) -> list:
+    """Get team statistics including advanced metrics like offensive/defensive rating, pace, and net rating.
+
+    Args:
+        season: Season in YYYY-YY format (default '2025-26')
+        season_type: 'Regular Season', 'Playoffs', 'Pre Season' (default 'Regular Season')
+        measure_type: 'Base', 'Advanced', 'Misc', 'Four Factors', 'Scoring', 'Opponent' (default 'Advanced')
+        per_mode: 'PerGame', 'Totals', 'Per100Possessions' (default 'PerGame')
+        conference: 'East' or 'West' (default None = all teams)
+        division: 'Atlantic', 'Central', 'Southeast', 'Northwest', 'Pacific', 'Southwest' (default None)
+        top_n: Number of teams to return (default 30 = all teams)
+        sort_by: Stat to sort by - for Advanced: NET_RATING, OFF_RATING, DEF_RATING, PACE, PIE, etc. (default 'NET_RATING')
+
+    Returns team stats sorted by the specified stat. Advanced stats include:
+        - OFF_RATING: Points scored per 100 possessions
+        - DEF_RATING: Points allowed per 100 possessions
+        - NET_RATING: Difference between offensive and defensive rating
+        - PACE: Possessions per 48 minutes
+        - PIE: Player Impact Estimate (team level)
+        - AST_PCT, AST_TO, AST_RATIO, OREB_PCT, DREB_PCT, REB_PCT, EFG_PCT, TS_PCT, etc."""
+    try:
+        stats = leaguedashteamstats.LeagueDashTeamStats(
+            season=season,
+            season_type_all_star=season_type,
+            measure_type_detailed_defense=measure_type,
+            per_mode_detailed=per_mode,
+            conference_nullable=conference or '',
+            division_simple_nullable=division or ''
+        )
+
+        df = stats.get_data_frames()[0]
+
+        if df.empty:
+            return [{"error": "No team stats found matching the specified filters"}]
+
+        # Sort by requested stat (descending for most stats, ascending for DEF_RATING)
+        ascending = sort_by in ['DEF_RATING']  # Lower defensive rating is better
+        if sort_by in df.columns:
+            df = df.nlargest(top_n, sort_by) if not ascending else df.nsmallest(top_n, sort_by)
+        else:
+            df = df.head(top_n)
+
+        results = []
+        for _, row in df.iterrows():
+            team_data = {
+                'rank': len(results) + 1,
+                'team': row['TEAM_NAME'],
+                'team_abbr': row['TEAM_ABBREVIATION'],
+                'gp': row['GP'],
+                'wins': row['W'],
+                'losses': row['L'],
+                'win_pct': row['W_PCT'],
+                'min': row['MIN']
+            }
+
+            # Add stats based on measure type
+            if measure_type == 'Advanced':
+                team_data.update({
+                    'off_rating': round(row['OFF_RATING'], 1) if 'OFF_RATING' in row else None,
+                    'def_rating': round(row['DEF_RATING'], 1) if 'DEF_RATING' in row else None,
+                    'net_rating': round(row['NET_RATING'], 1) if 'NET_RATING' in row else None,
+                    'pace': round(row['PACE'], 1) if 'PACE' in row else None,
+                    'pie': round(row['PIE'], 3) if 'PIE' in row else None,
+                    'ast_pct': round(row['AST_PCT'], 3) if 'AST_PCT' in row else None,
+                    'ast_to': round(row['AST_TO'], 2) if 'AST_TO' in row else None,
+                    'oreb_pct': round(row['OREB_PCT'], 3) if 'OREB_PCT' in row else None,
+                    'dreb_pct': round(row['DREB_PCT'], 3) if 'DREB_PCT' in row else None,
+                    'reb_pct': round(row['REB_PCT'], 3) if 'REB_PCT' in row else None,
+                    'efg_pct': round(row['EFG_PCT'], 3) if 'EFG_PCT' in row else None,
+                    'ts_pct': round(row['TS_PCT'], 3) if 'TS_PCT' in row else None,
+                })
+            elif measure_type == 'Base':
+                team_data.update({
+                    'pts': row['PTS'],
+                    'reb': row['REB'],
+                    'ast': row['AST'],
+                    'stl': row['STL'],
+                    'blk': row['BLK'],
+                    'tov': row['TOV'],
+                    'fg_pct': row['FG_PCT'],
+                    'fg3_pct': row['FG3_PCT'],
+                    'ft_pct': row['FT_PCT'],
+                    'plus_minus': row['PLUS_MINUS']
+                })
+            elif measure_type == 'Four Factors':
+                team_data.update({
+                    'efg_pct': row.get('EFG_PCT'),
+                    'fta_rate': row.get('FTA_RATE'),
+                    'tov_pct': row.get('TM_TOV_PCT'),
+                    'oreb_pct': row.get('OREB_PCT'),
+                    'opp_efg_pct': row.get('OPP_EFG_PCT'),
+                    'opp_fta_rate': row.get('OPP_FTA_RATE'),
+                    'opp_tov_pct': row.get('OPP_TOV_PCT'),
+                    'opp_oreb_pct': row.get('OPP_OREB_PCT')
+                })
+            else:
+                # For other measure types, include common available columns
+                for col in ['PTS', 'REB', 'AST', 'STL', 'BLK', 'TOV', 'FG_PCT', 'FG3_PCT', 'FT_PCT']:
+                    if col in row:
+                        team_data[col.lower()] = row[col]
+
+            results.append(team_data)
+
+        return results
+    except Exception as e:
+        return [{"error": f"Failed to get team stats: {str(e)}"}]
 
 @mcp.tool()
 async def get_play_by_play(game_id: str) -> list:

@@ -42,6 +42,7 @@ A remote MCP (Model Context Protocol) server that gives Claude access to real-ti
 | `get_player_game_log` | A player's recent game-by-game stats |
 | `get_player_season_stats` | A player's season totals and averages |
 | `get_league_leaders` | League leaders with extensive filters (position, conference, college, etc.) |
+| `get_team_stats` | Team stats including advanced metrics (offensive/defensive rating, pace, net rating) |
 
 ## Example Queries
 
@@ -63,6 +64,11 @@ A remote MCP (Model Context Protocol) server that gives Claude access to real-ti
 > "Who are the top 10 rookies in scoring?"
 > "Show me the leading scorers from Duke"
 > "Who has the best 3-point percentage among guards?"
+
+**Team Stats:**
+> "Which teams have the best offensive rating?"
+> "Show me the defensive ratings for Western Conference teams"
+> "What are the pace leaders in the NBA?"
 
 ## Data Source
 
