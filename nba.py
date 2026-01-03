@@ -1,6 +1,6 @@
 from typing import Any
 from fastmcp import FastMCP
-from nba_api.stats.endpoints import scoreboardv2, boxscoretraditionalv2, boxscorefourfactorsv2, playbyplayv2, leaguegamefinder, playergamelog, playercareerstats, leaguedashplayerstats, leaguedashteamstats
+from nba_api.stats.endpoints import scoreboardv2, boxscoretraditionalv3, boxscorefourfactorsv2, playbyplayv2, leaguegamefinder, playergamelog, playercareerstats, leaguedashplayerstats, leaguedashteamstats
 from nba_api.stats.static import players
 from nba_api.live.nba.endpoints import scoreboard as live_scoreboard, playbyplay as live_playbyplay
 import pandas as pd
@@ -425,39 +425,67 @@ async def get_box_score(game_id: str) -> list:
 
     Returns: Every player's stats - points, rebounds, assists, steals, blocks, turnovers, fouls, plus/minus, FG/3PT/FT made-attempted and percentages."""
     try:
-        box = boxscoretraditionalv2.BoxScoreTraditionalV2(game_id=game_id)
+        box = boxscoretraditionalv3.BoxScoreTraditionalV3(game_id=game_id)
         data = box.get_dict()
 
-        # Get player stats (first resultSet)
-        player_stats = data['resultSets'][0]
-        df = pd.DataFrame(player_stats['rowSet'], columns=player_stats['headers'])
-
-        if df.empty:
+        if 'boxScoreTraditional' not in data:
             return [{"error": f"No box score data found for game {game_id}"}]
 
+        bs = data['boxScoreTraditional']
         results = []
-        for _, row in df.iterrows():
-            results.append({
-                'player': row['PLAYER_NAME'],
-                'team': row['TEAM_ABBREVIATION'],
-                'team_city': row['TEAM_CITY'],
-                'position': row['START_POSITION'] if row['START_POSITION'] else 'Bench',
-                'min': row['MIN'],
-                'pts': int(row['PTS']) if pd.notna(row['PTS']) else 0,
-                'reb': int(row['REB']) if pd.notna(row['REB']) else 0,
-                'ast': int(row['AST']) if pd.notna(row['AST']) else 0,
-                'stl': int(row['STL']) if pd.notna(row['STL']) else 0,
-                'blk': int(row['BLK']) if pd.notna(row['BLK']) else 0,
-                'tov': int(row['TO']) if pd.notna(row['TO']) else 0,
-                'pf': int(row['PF']) if pd.notna(row['PF']) else 0,
-                'plus_minus': row['PLUS_MINUS'],
-                'fg': f"{int(row['FGM']) if pd.notna(row['FGM']) else 0}-{int(row['FGA']) if pd.notna(row['FGA']) else 0}",
-                'fg_pct': row['FG_PCT'],
-                'fg3': f"{int(row['FG3M']) if pd.notna(row['FG3M']) else 0}-{int(row['FG3A']) if pd.notna(row['FG3A']) else 0}",
-                'fg3_pct': row['FG3_PCT'],
-                'ft': f"{int(row['FTM']) if pd.notna(row['FTM']) else 0}-{int(row['FTA']) if pd.notna(row['FTA']) else 0}",
-                'ft_pct': row['FT_PCT']
-            })
+
+        # Process both teams
+        for team_key in ['homeTeam', 'awayTeam']:
+            team = bs[team_key]
+            team_name = team['teamName']
+            team_tricode = team['teamTricode']
+            team_city = team['teamCity']
+
+            # Get starters list for position info
+            starters = set(team.get('starters', []))
+
+            for player in team['players']:
+                stats = player.get('statistics', {})
+
+                # Skip players with no minutes (DNP)
+                minutes = stats.get('minutes', 'PT0M0.00S')
+                if minutes == 'PT0M0.00S' or not minutes:
+                    continue
+
+                # Parse minutes from PT##M##.##S format to MM:SS
+                if minutes.startswith('PT'):
+                    try:
+                        minutes = minutes[2:]  # Remove PT
+                        if 'M' in minutes:
+                            mins, rest = minutes.split('M')
+                            secs = rest.replace('S', '').split('.')[0]
+                            minutes = f"{mins}:{secs.zfill(2)}"
+                        else:
+                            minutes = "0:00"
+                    except:
+                        pass
+
+                results.append({
+                    'player': f"{player['firstName']} {player['familyName']}",
+                    'team': team_tricode,
+                    'team_city': team_city,
+                    'position': player.get('position', '') or ('Starter' if player['personId'] in starters else 'Bench'),
+                    'min': minutes,
+                    'pts': stats.get('points', 0),
+                    'reb': stats.get('reboundsTotal', 0),
+                    'ast': stats.get('assists', 0),
+                    'stl': stats.get('steals', 0),
+                    'blk': stats.get('blocks', 0),
+                    'tov': stats.get('turnovers', 0),
+                    'pf': stats.get('foulsPersonal', 0),
+                    'plus_minus': stats.get('plusMinusPoints', 0),
+                    'fg': f"{stats.get('fieldGoalsMade', 0)}-{stats.get('fieldGoalsAttempted', 0)}",
+                    'fg_pct': round(stats.get('fieldGoalsPercentage', 0), 3),
+                    'fg3': f"{stats.get('threePointersMade', 0)}-{stats.get('threePointersAttempted', 0)}",
+                    'fg3_pct': round(stats.get('threePointersPercentage', 0), 3),
+                    'ft': f"{stats.get('freeThrowsMade', 0)}-{stats.get('freeThrowsAttempted', 0)}",
+                    'ft_pct': round(stats.get('freeThrowsPercentage', 0), 3)
+                })
 
         return results
     except Exception as e:
