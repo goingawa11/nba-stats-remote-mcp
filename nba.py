@@ -443,59 +443,58 @@ async def get_team_stats(
             team_data = {
                 'rank': len(results) + 1,
                 'team': row['TEAM_NAME'],
-                'team_abbr': row['TEAM_ABBREVIATION'],
-                'gp': row['GP'],
-                'wins': row['W'],
-                'losses': row['L'],
-                'win_pct': row['W_PCT'],
-                'min': row['MIN']
+                'gp': int(row['GP']),
+                'wins': int(row['W']),
+                'losses': int(row['L']),
+                'win_pct': round(row['W_PCT'], 3),
+                'min': round(row['MIN'], 1)
             }
 
             # Add stats based on measure type
             if measure_type == 'Advanced':
                 team_data.update({
-                    'off_rating': round(row['OFF_RATING'], 1) if 'OFF_RATING' in row else None,
-                    'def_rating': round(row['DEF_RATING'], 1) if 'DEF_RATING' in row else None,
-                    'net_rating': round(row['NET_RATING'], 1) if 'NET_RATING' in row else None,
-                    'pace': round(row['PACE'], 1) if 'PACE' in row else None,
-                    'pie': round(row['PIE'], 3) if 'PIE' in row else None,
-                    'ast_pct': round(row['AST_PCT'], 3) if 'AST_PCT' in row else None,
-                    'ast_to': round(row['AST_TO'], 2) if 'AST_TO' in row else None,
-                    'oreb_pct': round(row['OREB_PCT'], 3) if 'OREB_PCT' in row else None,
-                    'dreb_pct': round(row['DREB_PCT'], 3) if 'DREB_PCT' in row else None,
-                    'reb_pct': round(row['REB_PCT'], 3) if 'REB_PCT' in row else None,
-                    'efg_pct': round(row['EFG_PCT'], 3) if 'EFG_PCT' in row else None,
-                    'ts_pct': round(row['TS_PCT'], 3) if 'TS_PCT' in row else None,
+                    'off_rating': round(row['OFF_RATING'], 1),
+                    'def_rating': round(row['DEF_RATING'], 1),
+                    'net_rating': round(row['NET_RATING'], 1),
+                    'pace': round(row['PACE'], 1),
+                    'pie': round(row['PIE'], 3),
+                    'ast_pct': round(row['AST_PCT'], 3),
+                    'ast_to': round(row['AST_TO'], 2),
+                    'oreb_pct': round(row['OREB_PCT'], 3),
+                    'dreb_pct': round(row['DREB_PCT'], 3),
+                    'reb_pct': round(row['REB_PCT'], 3),
+                    'efg_pct': round(row['EFG_PCT'], 3),
+                    'ts_pct': round(row['TS_PCT'], 3),
                 })
             elif measure_type == 'Base':
                 team_data.update({
-                    'pts': row['PTS'],
-                    'reb': row['REB'],
-                    'ast': row['AST'],
-                    'stl': row['STL'],
-                    'blk': row['BLK'],
-                    'tov': row['TOV'],
-                    'fg_pct': row['FG_PCT'],
-                    'fg3_pct': row['FG3_PCT'],
-                    'ft_pct': row['FT_PCT'],
-                    'plus_minus': row['PLUS_MINUS']
+                    'pts': round(row['PTS'], 1),
+                    'reb': round(row['REB'], 1),
+                    'ast': round(row['AST'], 1),
+                    'stl': round(row['STL'], 1),
+                    'blk': round(row['BLK'], 1),
+                    'tov': round(row['TOV'], 1),
+                    'fg_pct': round(row['FG_PCT'], 3),
+                    'fg3_pct': round(row['FG3_PCT'], 3),
+                    'ft_pct': round(row['FT_PCT'], 3),
+                    'plus_minus': round(row['PLUS_MINUS'], 1)
                 })
             elif measure_type == 'Four Factors':
                 team_data.update({
-                    'efg_pct': row.get('EFG_PCT'),
-                    'fta_rate': row.get('FTA_RATE'),
-                    'tov_pct': row.get('TM_TOV_PCT'),
-                    'oreb_pct': row.get('OREB_PCT'),
-                    'opp_efg_pct': row.get('OPP_EFG_PCT'),
-                    'opp_fta_rate': row.get('OPP_FTA_RATE'),
-                    'opp_tov_pct': row.get('OPP_TOV_PCT'),
-                    'opp_oreb_pct': row.get('OPP_OREB_PCT')
+                    'efg_pct': round(row['EFG_PCT'], 3) if 'EFG_PCT' in df.columns else None,
+                    'fta_rate': round(row['FTA_RATE'], 3) if 'FTA_RATE' in df.columns else None,
+                    'tov_pct': round(row['TM_TOV_PCT'], 3) if 'TM_TOV_PCT' in df.columns else None,
+                    'oreb_pct': round(row['OREB_PCT'], 3) if 'OREB_PCT' in df.columns else None,
+                    'opp_efg_pct': round(row['OPP_EFG_PCT'], 3) if 'OPP_EFG_PCT' in df.columns else None,
+                    'opp_fta_rate': round(row['OPP_FTA_RATE'], 3) if 'OPP_FTA_RATE' in df.columns else None,
+                    'opp_tov_pct': round(row['OPP_TOV_PCT'], 3) if 'OPP_TOV_PCT' in df.columns else None,
+                    'opp_oreb_pct': round(row['OPP_OREB_PCT'], 3) if 'OPP_OREB_PCT' in df.columns else None
                 })
             else:
                 # For other measure types, include common available columns
                 for col in ['PTS', 'REB', 'AST', 'STL', 'BLK', 'TOV', 'FG_PCT', 'FG3_PCT', 'FT_PCT']:
-                    if col in row:
-                        team_data[col.lower()] = row[col]
+                    if col in df.columns:
+                        team_data[col.lower()] = round(row[col], 1) if col in ['PTS', 'REB', 'AST', 'STL', 'BLK', 'TOV'] else round(row[col], 3)
 
             results.append(team_data)
 
