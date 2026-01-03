@@ -2,7 +2,7 @@ from typing import Any
 from fastmcp import FastMCP
 from nba_api.stats.endpoints import scoreboardv2, boxscoretraditionalv2, boxscorefourfactorsv2, playbyplayv2, leaguegamefinder, playergamelog, playercareerstats, leaguedashplayerstats, leaguedashteamstats
 from nba_api.stats.static import players
-from nba_api.live.nba.endpoints import scoreboard as live_scoreboard
+from nba_api.live.nba.endpoints import scoreboard as live_scoreboard, playbyplay as live_playbyplay
 import pandas as pd
 
 # Initialize FastMCP server
@@ -503,42 +503,61 @@ async def get_team_stats(
         return [{"error": f"Failed to get team stats: {str(e)}"}]
 
 @mcp.tool()
-async def get_play_by_play(game_id: str) -> list:
-    """Returns the play by play data from a game.
-    Use get_recent_scores first to find the game_id.
+async def get_play_by_play(game_id: str, last_n_actions: int = 0) -> list:
+    """Returns the play by play data from a game using the NBA live API.
+    Use get_recent_scores or get_todays_scores first to find the game_id.
+    Note: This uses the live API which works best for recent/current season games.
     Args:
-        game_id: The NBA game ID (e.g., '0022500460')"""
+        game_id: The NBA game ID (e.g., '0022500460')
+        last_n_actions: If > 0, only return the last N plays (useful for recent action). Default 0 = all plays."""
     try:
-        pbp = playbyplayv2.PlayByPlayV2(game_id=game_id)
+        pbp = live_playbyplay.PlayByPlay(game_id)
         data = pbp.get_dict()
 
-        plays_data = data['resultSets'][0]
-        df = pd.DataFrame(plays_data['rowSet'], columns=plays_data['headers'])
-
-        if df.empty:
+        if 'game' not in data or 'actions' not in data['game']:
             return [{"error": f"No play-by-play data found for game {game_id}"}]
 
-        results = []
-        for _, row in df.iterrows():
-            play = {
-                'period': row['PERIOD'],
-                'time': row['PCTIMESTRING'],
-                'score': row['SCORE'],
-                'margin': row['SCOREMARGIN']
-            }
-            # Add description based on which team made the play
-            if pd.notna(row['HOMEDESCRIPTION']) and row['HOMEDESCRIPTION']:
-                play['description'] = row['HOMEDESCRIPTION']
-                play['team'] = 'HOME'
-            elif pd.notna(row['VISITORDESCRIPTION']) and row['VISITORDESCRIPTION']:
-                play['description'] = row['VISITORDESCRIPTION']
-                play['team'] = 'AWAY'
-            elif pd.notna(row['NEUTRALDESCRIPTION']) and row['NEUTRALDESCRIPTION']:
-                play['description'] = row['NEUTRALDESCRIPTION']
-                play['team'] = 'NEUTRAL'
-            else:
-                continue  # Skip empty plays
+        actions = data['game']['actions']
 
+        if not actions:
+            return [{"error": f"No plays found for game {game_id}"}]
+
+        # Optionally limit to last N actions
+        if last_n_actions > 0:
+            actions = actions[-last_n_actions:]
+
+        results = []
+        for action in actions:
+            # Skip non-play actions (like period start/end with no description)
+            description = action.get('description', '')
+            if not description:
+                continue
+
+            # Parse the clock time (format: PT11M30.00S -> 11:30)
+            clock = action.get('clock', '')
+            if clock.startswith('PT'):
+                try:
+                    # Extract minutes and seconds from PT##M##.##S format
+                    clock = clock[2:]  # Remove PT
+                    if 'M' in clock:
+                        mins, rest = clock.split('M')
+                        secs = rest.replace('S', '').split('.')[0]
+                        clock = f"{mins}:{secs.zfill(2)}"
+                    else:
+                        secs = clock.replace('S', '').split('.')[0]
+                        clock = f"0:{secs.zfill(2)}"
+                except:
+                    pass
+
+            play = {
+                'period': action.get('period'),
+                'clock': clock,
+                'score': f"{action.get('scoreAway', '0')} - {action.get('scoreHome', '0')}",
+                'description': description,
+                'action_type': action.get('actionType'),
+                'team': action.get('teamTricode', ''),
+                'player': action.get('playerNameI', '')
+            }
             results.append(play)
 
         return results
