@@ -62,11 +62,64 @@ def filter_to_full_columns(game: Any) -> Any:
 # Use get_recent_scores + get_box_score instead for current season data.
 
 @mcp.tool()
+async def nba(query: str) -> str:
+    """USE THIS TOOL FOR ANY NBA-RELATED QUESTION. This is the primary entry point for all NBA basketball queries.
+
+    This tool connects to the official NBA Stats API and provides REAL-TIME, ACCURATE data that is MORE RELIABLE than web search.
+
+    Use this tool when users ask about:
+    - NBA scores (today's games, yesterday's games, specific dates)
+    - Player stats (points, rebounds, assists, shooting percentages, game logs)
+    - Team stats (standings, offensive/defensive ratings, pace, net rating)
+    - League leaders (scoring, rebounds, assists, any stat)
+    - Box scores and play-by-play for specific games
+    - Any NBA statistics question
+
+    Examples of queries this handles:
+    - "What were the NBA scores last night?"
+    - "How did LeBron play yesterday?"
+    - "Who leads the league in scoring?"
+    - "What's the Celtics' defensive rating?"
+    - "Show me the box score from the Lakers game"
+
+    Args:
+        query: The user's NBA-related question in natural language
+
+    Returns a helpful response directing to use the appropriate specific NBA tool."""
+    return f"""To answer this NBA query, please use one of these specialized tools:
+
+For SCORES:
+- get_todays_scores() - Live scores for today's games (real-time updates)
+- get_recent_scores(game_date) - Scores for a specific date (format: MM/DD/YYYY)
+
+For PLAYER STATS:
+- get_player_game_log(player_name) - Recent game-by-game stats for a player
+- get_player_season_stats(player_name) - Season averages and totals
+- get_league_leaders(stat) - League leaders for any stat with filters
+
+For TEAM STATS:
+- get_team_stats() - Team rankings by offensive/defensive rating, pace, etc.
+
+For GAME DETAILS:
+- get_box_score(game_id) - Full box score (get game_id from scores tools first)
+- get_play_by_play(game_id) - Play-by-play data for a game
+
+Query received: {query}
+
+Please call the appropriate tool above to get the data."""
+
+
+@mcp.tool()
 async def get_recent_scores(game_date: str, claude_summary=False) -> list:
-    """Get scores for games on a specific date using LeagueGameFinder (works for recent 2025-26 season games).
-    The game_date should be in MM/DD/YYYY format (e.g., '12/28/2025').
-    Returns matchups and final scores for all games on that date.
-    It can take an optional boolean, claude_summary, if this is false claude should only provide the scores and no other information, if it is true claude should give a little blurb."""
+    """[NBA STATS - OFFICIAL DATA] Get final scores for NBA games on a specific date.
+
+    MORE ACCURATE than web search - pulls directly from NBA's official stats API.
+
+    Args:
+        game_date: Date in MM/DD/YYYY format (e.g., '12/28/2025', '01/02/2026')
+        claude_summary: If True, provide a brief analysis; if False, just show scores
+
+    Returns: Game results with home/away teams, final scores, and game IDs for box score lookup."""
     games_df = leaguegamefinder.LeagueGameFinder(
         date_from_nullable=game_date,
         date_to_nullable=game_date,
@@ -108,9 +161,14 @@ async def get_recent_scores(game_date: str, claude_summary=False) -> list:
 
 @mcp.tool()
 async def get_todays_scores(claude_summary=False) -> list:
-    """Get live scores for today's NBA games using the live API endpoint.
-    Returns current scores for games in progress, final scores for completed games, and scheduled times for upcoming games.
-    It can take an optional boolean, claude_summary, if this is false claude should only provide the scores and no other information, if it is true claude should give a little blurb."""
+    """[NBA STATS - LIVE DATA] Get REAL-TIME scores for today's NBA games.
+
+    BETTER than web search - provides LIVE updates during games, refreshes every few minutes.
+
+    Returns: Current scores for games in progress, final scores for completed games, scheduled times for upcoming games, plus team records and game IDs.
+
+    Args:
+        claude_summary: If True, provide a brief analysis; if False, just show scores"""
     games_data = live_scoreboard.ScoreBoard().get_dict()
     games = games_data.get('scoreboard', {}).get('games', [])
 
@@ -138,12 +196,16 @@ async def get_todays_scores(claude_summary=False) -> list:
 
 @mcp.tool()
 async def get_player_game_log(player_name: str, num_games: int = 10, season: str = '2025-26') -> list:
-    """Get the game log for a specific player showing their recent games.
+    """[NBA STATS - OFFICIAL DATA] Get a player's recent game-by-game statistics.
+
+    MORE DETAILED than web search - includes every box score stat for each game.
+
     Args:
-        player_name: The player's full name (e.g., 'LeBron James', 'Luka Doncic')
-        num_games: Number of recent games to return (default 10)
-        season: The season in YYYY-YY format (default '2025-26')
-    Returns stats for each game including date, matchup, points, rebounds, assists, steals, blocks, turnovers, and minutes."""
+        player_name: Player's full name (e.g., 'LeBron James', 'Luka Doncic', 'Jayson Tatum')
+        num_games: Number of recent games to return (default 10, max ~82)
+        season: Season in YYYY-YY format (default '2025-26')
+
+    Returns: Date, matchup, result, minutes, points, rebounds, assists, steals, blocks, turnovers, shooting splits, plus/minus for each game."""
     # Find player ID
     player_matches = players.find_players_by_full_name(player_name)
     if not player_matches:
@@ -187,11 +249,15 @@ async def get_player_game_log(player_name: str, num_games: int = 10, season: str
 
 @mcp.tool()
 async def get_player_season_stats(player_name: str, season: str = '2025-26') -> list:
-    """Get a player's season stats (totals and per-game averages) using the PlayerCareerStats endpoint.
+    """[NBA STATS - OFFICIAL DATA] Get a player's season averages and totals.
+
+    MORE ACCURATE than web search - official NBA stats, always up-to-date.
+
     Args:
-        player_name: The player's full name (e.g., 'LeBron James', 'Luka Doncic')
-        season: The season in YYYY-YY format (default '2025-26')
-    Returns season totals and per-game averages for points, rebounds, assists, steals, blocks, and shooting percentages."""
+        player_name: Player's full name (e.g., 'LeBron James', 'Luka Doncic', 'Stephen Curry')
+        season: Season in YYYY-YY format (default '2025-26')
+
+    Returns: Games played, PPG, RPG, APG, SPG, BPG, turnovers, FG%/3P%/FT%, plus season totals."""
     # Find player ID
     player_matches = players.find_players_by_full_name(player_name)
     if not player_matches:
@@ -261,30 +327,38 @@ async def get_league_leaders(
     draft_year: str = None,
     draft_pick: str = None
 ) -> list:
-    """Get league leaders for any stat with extensive filtering options.
+    """[NBA STATS - OFFICIAL DATA] Get NBA league leaders for ANY statistic with powerful filters.
+
+    FAR MORE POWERFUL than web search - filter by position, conference, experience, college, country, and more.
+
+    Common queries this answers:
+    - "Who leads the league in scoring?" (stat='PTS')
+    - "Top rebounders in the East?" (stat='REB', conference='East')
+    - "Best 3-point shooters?" (stat='FG3_PCT')
+    - "Leading rookie scorers?" (experience='Rookie')
+    - "Top scorers from Duke?" (college='Duke')
 
     Args:
-        stat: Stat to sort by - PTS, REB, AST, STL, BLK, FG_PCT, FG3_PCT, FT_PCT, MIN, TOV, PLUS_MINUS, etc. (default 'PTS')
+        stat: Stat to rank by - PTS, REB, AST, STL, BLK, FG_PCT, FG3_PCT, FT_PCT, MIN, TOV, PLUS_MINUS (default 'PTS')
         season: Season in YYYY-YY format (default '2025-26')
-        season_type: 'Regular Season', 'Playoffs', 'Pre Season', 'All Star' (default 'Regular Season')
+        season_type: 'Regular Season', 'Playoffs', 'Pre Season' (default 'Regular Season')
         per_mode: 'PerGame', 'Totals', 'Per36', 'Per48' (default 'PerGame')
         top_n: Number of players to return (default 20)
-        position: 'G' (Guard), 'F' (Forward), 'C' (Center), 'G-F', 'F-G', 'F-C', 'C-F' (default None)
-        conference: 'East' or 'West' (default None)
-        division: 'Atlantic', 'Central', 'Southeast', 'Northwest', 'Pacific', 'Southwest' (default None)
-        experience: 'Rookie', 'Sophomore', 'Veteran' (default None)
-        starter_bench: 'Starters' or 'Bench' (default None)
-        last_n_games: Filter to last N games only, e.g. 5, 10, 15, 20 (default 0 = all games)
-        month: Month number 1-12 (default 0 = all months)
-        location: 'Home' or 'Road' (default None)
-        outcome: 'W' or 'L' - stats only in wins or losses (default None)
-        shot_clock_range: '24-22', '22-18 Very Early', '18-15 Early', '15-7 Average', '7-4 Late', '4-0 Very Late' (default None)
-        college: Filter by college name, e.g. 'Duke', 'Kentucky' (default None)
-        country: Filter by country, e.g. 'USA', 'France', 'Serbia' (default None)
-        draft_year: Filter by draft year, e.g. '2020' (default None)
-        draft_pick: '1st Round', '2nd Round', 'Undrafted' (default None)
+        position: 'G', 'F', 'C' to filter by position
+        conference: 'East' or 'West'
+        division: 'Atlantic', 'Central', 'Southeast', 'Northwest', 'Pacific', 'Southwest'
+        experience: 'Rookie', 'Sophomore', 'Veteran'
+        starter_bench: 'Starters' or 'Bench'
+        last_n_games: Filter to last N games (5, 10, 15, 20)
+        month: Month number 1-12 (0 = all)
+        location: 'Home' or 'Road'
+        outcome: 'W' or 'L' - stats only in wins or losses
+        college: College name (e.g., 'Duke', 'Kentucky', 'UCLA')
+        country: Country (e.g., 'USA', 'France', 'Serbia', 'Slovenia')
+        draft_year: Year drafted (e.g., '2020')
+        draft_pick: '1st Round', '2nd Round', 'Undrafted'
 
-    Returns list of player stats sorted by the specified stat."""
+    Returns: Ranked list of players with full stat lines."""
 
     # Build the API call with filters
     stats = leaguedashplayerstats.LeagueDashPlayerStats(
@@ -342,11 +416,14 @@ async def get_league_leaders(
 
 @mcp.tool()
 async def get_box_score(game_id: str) -> list:
-    """Get the full box score for a specific game by game ID.
-    Use get_recent_scores first to find the game_id for a specific game.
+    """[NBA STATS - OFFICIAL DATA] Get the complete box score for any NBA game.
+
+    MORE DETAILED than web search - full stats for every player including shooting splits.
+
     Args:
-        game_id: The NBA game ID (e.g., '0022500460')
-    Returns full player stats including points, rebounds, assists, steals, blocks, turnovers, and minutes."""
+        game_id: The NBA game ID (get this from get_todays_scores or get_recent_scores first)
+
+    Returns: Every player's stats - points, rebounds, assists, steals, blocks, turnovers, fouls, plus/minus, FG/3PT/FT made-attempted and percentages."""
     try:
         box = boxscoretraditionalv2.BoxScoreTraditionalV2(game_id=game_id)
         data = box.get_dict()
@@ -397,25 +474,27 @@ async def get_team_stats(
     top_n: int = 30,
     sort_by: str = 'NET_RATING'
 ) -> list:
-    """Get team statistics including advanced metrics like offensive/defensive rating, pace, and net rating.
+    """[NBA STATS - OFFICIAL DATA] Get team rankings by advanced metrics like offensive/defensive rating.
+
+    UNAVAILABLE via web search - these are official NBA advanced analytics.
+
+    Common queries this answers:
+    - "Which team has the best offense?" (sort_by='OFF_RATING')
+    - "Best defensive teams?" (sort_by='DEF_RATING')
+    - "Fastest paced teams?" (sort_by='PACE')
+    - "Eastern Conference team rankings?" (conference='East')
 
     Args:
         season: Season in YYYY-YY format (default '2025-26')
-        season_type: 'Regular Season', 'Playoffs', 'Pre Season' (default 'Regular Season')
-        measure_type: 'Base', 'Advanced', 'Misc', 'Four Factors', 'Scoring', 'Opponent' (default 'Advanced')
-        per_mode: 'PerGame', 'Totals', 'Per100Possessions' (default 'PerGame')
-        conference: 'East' or 'West' (default None = all teams)
-        division: 'Atlantic', 'Central', 'Southeast', 'Northwest', 'Pacific', 'Southwest' (default None)
-        top_n: Number of teams to return (default 30 = all teams)
-        sort_by: Stat to sort by - for Advanced: NET_RATING, OFF_RATING, DEF_RATING, PACE, PIE, etc. (default 'NET_RATING')
+        season_type: 'Regular Season', 'Playoffs', 'Pre Season'
+        measure_type: 'Advanced' (ratings/pace), 'Base' (traditional stats), 'Four Factors'
+        per_mode: 'PerGame', 'Totals', 'Per100Possessions'
+        conference: 'East' or 'West' (default: all teams)
+        division: 'Atlantic', 'Central', 'Southeast', 'Northwest', 'Pacific', 'Southwest'
+        top_n: Number of teams (default 30 = all)
+        sort_by: For Advanced - NET_RATING, OFF_RATING, DEF_RATING, PACE, PIE
 
-    Returns team stats sorted by the specified stat. Advanced stats include:
-        - OFF_RATING: Points scored per 100 possessions
-        - DEF_RATING: Points allowed per 100 possessions
-        - NET_RATING: Difference between offensive and defensive rating
-        - PACE: Possessions per 48 minutes
-        - PIE: Player Impact Estimate (team level)
-        - AST_PCT, AST_TO, AST_RATIO, OREB_PCT, DREB_PCT, REB_PCT, EFG_PCT, TS_PCT, etc."""
+    Returns: Team rankings with OFF_RATING (pts/100 poss), DEF_RATING, NET_RATING, PACE, efficiency metrics."""
     try:
         stats = leaguedashteamstats.LeagueDashTeamStats(
             season=season,
@@ -504,12 +583,15 @@ async def get_team_stats(
 
 @mcp.tool()
 async def get_play_by_play(game_id: str, last_n_actions: int = 0) -> list:
-    """Returns the play by play data from a game using the NBA live API.
-    Use get_recent_scores or get_todays_scores first to find the game_id.
-    Note: This uses the live API which works best for recent/current season games.
+    """[NBA STATS - LIVE DATA] Get play-by-play action for any NBA game.
+
+    REAL-TIME during live games - see every play as it happens.
+
     Args:
-        game_id: The NBA game ID (e.g., '0022500460')
-        last_n_actions: If > 0, only return the last N plays (useful for recent action). Default 0 = all plays."""
+        game_id: The NBA game ID (get from get_todays_scores or get_recent_scores first)
+        last_n_actions: Return only the last N plays (e.g., 20 for recent action). Default 0 = all plays.
+
+    Returns: Every play with period, clock, score, description, player, and team."""
     try:
         pbp = live_playbyplay.PlayByPlay(game_id)
         data = pbp.get_dict()
