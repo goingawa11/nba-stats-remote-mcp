@@ -106,6 +106,11 @@ For GAME DETAILS:
 - get_box_scores_batch(game_ids) - Multiple box scores in one call (efficient for analyzing multiple games)
 - get_play_by_play(game_id) - Play-by-play data for a game
 
+For BATCH/COMPARISON QUERIES (most efficient):
+- get_players_comparison(player_names) - Compare 2-5 players' season stats in ONE call
+- get_scores_date_range(start_date, end_date, team_filter) - Get games across a date range
+- get_player_splits(player_name, split_type) - Home/away, wins/losses, by-month splits
+
 Query received: {query}
 
 Please call the appropriate tool above to get the data."""
@@ -860,6 +865,260 @@ async def get_play_by_play(game_id: str, last_n_actions: int = 0) -> list:
         return results
     except Exception as e:
         return [{"error": f"Failed to get play-by-play: {str(e)}"}]
+
+
+@mcp.tool()
+async def get_players_comparison(
+    player_names: list[str],
+    season: str = '2025-26',
+    per_mode: str = 'PerGame'
+) -> list:
+    """[NBA STATS - BATCH] Compare multiple players' season stats in a single call.
+
+    MUCH MORE EFFICIENT than calling get_player_season_stats multiple times.
+
+    Args:
+        player_names: List of 2-5 player names to compare (e.g., ['LeBron James', 'Kevin Durant', 'Giannis Antetokounmpo'])
+        season: Season in YYYY-YY format (default '2025-26')
+        per_mode: 'PerGame', 'Totals', 'Per36', 'Per48' (default 'PerGame')
+
+    Returns: Side-by-side comparison of all players' stats for easy analysis.
+
+    Example use cases:
+    - "Compare LeBron and Curry this season"
+    - "Who's better: Tatum, Brown, or Edwards?"
+    - "MVP candidates comparison"
+    """
+    if len(player_names) > 5:
+        return [{"error": "Maximum 5 players per comparison"}]
+    if len(player_names) < 2:
+        return [{"error": "Need at least 2 players to compare"}]
+
+    # Fetch all player stats from leaguedashplayerstats (single API call)
+    stats = leaguedashplayerstats.LeagueDashPlayerStats(
+        season=season,
+        per_mode_detailed=per_mode
+    )
+    df = stats.get_data_frames()[0]
+
+    results = []
+    not_found = []
+
+    for name in player_names:
+        # Find player in the dataframe (case-insensitive partial match)
+        name_lower = name.lower()
+        matches = df[df['PLAYER_NAME'].str.lower().str.contains(name_lower, na=False)]
+
+        if matches.empty:
+            not_found.append(name)
+            continue
+
+        # Take the first match
+        row = matches.iloc[0]
+        results.append({
+            'player': row['PLAYER_NAME'],
+            'team': row['TEAM_ABBREVIATION'],
+            'age': row['AGE'],
+            'gp': row['GP'],
+            'min': round(row['MIN'], 1),
+            'pts': round(row['PTS'], 1),
+            'reb': round(row['REB'], 1),
+            'ast': round(row['AST'], 1),
+            'stl': round(row['STL'], 1),
+            'blk': round(row['BLK'], 1),
+            'tov': round(row['TOV'], 1),
+            'fg_pct': round(row['FG_PCT'], 3),
+            'fg3_pct': round(row['FG3_PCT'], 3),
+            'ft_pct': round(row['FT_PCT'], 3),
+            'plus_minus': round(row['PLUS_MINUS'], 1),
+            'fantasy_pts': round(row['NBA_FANTASY_PTS'], 1) if 'NBA_FANTASY_PTS' in df.columns else None
+        })
+
+    if not_found:
+        results.append({'warning': f"Players not found: {', '.join(not_found)}"})
+
+    return results
+
+
+@mcp.tool()
+async def get_scores_date_range(
+    start_date: str,
+    end_date: str,
+    team_filter: str = None
+) -> list:
+    """[NBA STATS - BATCH] Get scores across multiple dates in a single call.
+
+    MORE EFFICIENT than calling get_recent_scores for each date.
+
+    Args:
+        start_date: Start date in MM/DD/YYYY format (e.g., '01/01/2026')
+        end_date: End date in MM/DD/YYYY format (e.g., '01/07/2026')
+        team_filter: Optional team abbreviation to filter (e.g., 'LAL', 'BOS', 'GSW')
+
+    Returns: All games in the date range, optionally filtered to one team's games.
+
+    Example use cases:
+    - "Lakers games this week"
+    - "All games from Christmas to New Year"
+    - "Celtics record over the last 7 days"
+    """
+    games_df = leaguegamefinder.LeagueGameFinder(
+        date_from_nullable=start_date,
+        date_to_nullable=end_date,
+        league_id_nullable='00'
+    ).get_data_frames()[0]
+
+    if games_df.empty:
+        return [{"error": f"No games found between {start_date} and {end_date}"}]
+
+    # Apply team filter if specified
+    if team_filter:
+        team_filter_upper = team_filter.upper()
+        games_df = games_df[games_df['TEAM_ABBREVIATION'] == team_filter_upper]
+        if games_df.empty:
+            return [{"error": f"No games found for {team_filter} between {start_date} and {end_date}"}]
+
+    # Keep a copy of full data before filtering for team lookup
+    all_games_df = games_df.copy() if not team_filter else leaguegamefinder.LeagueGameFinder(
+        date_from_nullable=start_date,
+        date_to_nullable=end_date,
+        league_id_nullable='00'
+    ).get_data_frames()[0]
+
+    # Group by game to get both teams' scores
+    results = []
+    seen_games = set()
+
+    for _, row in games_df.iterrows():
+        game_id = row['GAME_ID']
+        if game_id in seen_games:
+            continue
+
+        # Get both rows for this game from the full dataset
+        game_rows = all_games_df[all_games_df['GAME_ID'] == game_id]
+
+        if len(game_rows) == 2:
+            seen_games.add(game_id)
+            team1 = game_rows.iloc[0]
+            team2 = game_rows.iloc[1]
+
+            # Determine home/away from MATCHUP
+            if '@' in team1['MATCHUP']:
+                away, home = team1, team2
+            else:
+                home, away = team1, team2
+
+            results.append({
+                'game_id': game_id,
+                'game_date': row['GAME_DATE'],
+                'home_team': home['TEAM_NAME'],
+                'home_abbrev': home['TEAM_ABBREVIATION'],
+                'home_score': int(home['PTS']),
+                'away_team': away['TEAM_NAME'],
+                'away_abbrev': away['TEAM_ABBREVIATION'],
+                'away_score': int(away['PTS']),
+                'matchup': f"{away['TEAM_ABBREVIATION']} @ {home['TEAM_ABBREVIATION']}"
+            })
+
+    # Sort by date (most recent first)
+    results.sort(key=lambda x: x['game_date'], reverse=True)
+
+    return results
+
+
+@mcp.tool()
+async def get_player_splits(
+    player_name: str,
+    season: str = '2025-26',
+    split_type: str = 'location'
+) -> dict:
+    """[NBA STATS - ENRICHED] Get player performance splits (home/away, wins/losses, by month).
+
+    UNAVAILABLE via simple web search - requires specific API queries.
+
+    Args:
+        player_name: Player's full name (e.g., 'LeBron James')
+        season: Season in YYYY-YY format (default '2025-26')
+        split_type: Type of split - 'location' (home/away), 'outcome' (wins/losses), 'month' (by month), or 'all'
+
+    Returns: Player stats broken down by the specified split.
+
+    Example use cases:
+    - "How does LeBron play at home vs on the road?"
+    - "Curry's stats in wins vs losses"
+    - "Tatum's scoring by month"
+    """
+    # Find player ID
+    player_matches = players.find_players_by_full_name(player_name)
+    if not player_matches:
+        return {"error": f"Player '{player_name}' not found"}
+
+    player_id = player_matches[0]['id']
+    player_full_name = player_matches[0]['full_name']
+
+    result = {
+        'player': player_full_name,
+        'season': season,
+        'splits': {}
+    }
+
+    # Get game log to calculate splits manually
+    gamelog = playergamelog.PlayerGameLog(player_id=player_id, season=season)
+    df = gamelog.get_data_frames()[0]
+
+    if df.empty:
+        return {"error": f"No games found for {player_full_name} in {season}"}
+
+    def calc_averages(games_df):
+        if games_df.empty:
+            return None
+        gp = len(games_df)
+        return {
+            'gp': gp,
+            'ppg': round(games_df['PTS'].mean(), 1),
+            'rpg': round(games_df['REB'].mean(), 1),
+            'apg': round(games_df['AST'].mean(), 1),
+            'spg': round(games_df['STL'].mean(), 1),
+            'bpg': round(games_df['BLK'].mean(), 1),
+            'topg': round(games_df['TOV'].mean(), 1),
+            'fg_pct': round(games_df['FG_PCT'].mean(), 3),
+            'fg3_pct': round(games_df['FG3_PCT'].mean(), 3),
+            'ft_pct': round(games_df['FT_PCT'].mean(), 3),
+            'plus_minus_avg': round(games_df['PLUS_MINUS'].mean(), 1)
+        }
+
+    if split_type in ['location', 'all']:
+        # Home games contain "vs." in matchup, away games contain "@"
+        home_games = df[df['MATCHUP'].str.contains('vs.', na=False)]
+        away_games = df[df['MATCHUP'].str.contains('@', na=False)]
+
+        result['splits']['location'] = {
+            'home': calc_averages(home_games),
+            'away': calc_averages(away_games)
+        }
+
+    if split_type in ['outcome', 'all']:
+        wins = df[df['WL'] == 'W']
+        losses = df[df['WL'] == 'L']
+
+        result['splits']['outcome'] = {
+            'wins': calc_averages(wins),
+            'losses': calc_averages(losses)
+        }
+
+    if split_type in ['month', 'all']:
+        # Parse month from game date
+        df['MONTH'] = pd.to_datetime(df['GAME_DATE']).dt.strftime('%B')
+        months = df['MONTH'].unique()
+
+        month_splits = {}
+        for month in months:
+            month_games = df[df['MONTH'] == month]
+            month_splits[month] = calc_averages(month_games)
+
+        result['splits']['by_month'] = month_splits
+
+    return result
 
 
 if __name__ == "__main__":
