@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Install NBA Stats for Claude Desktop</title>
+    <title>Install NBA Stats for Claude</title>
     <style>
         * {
             box-sizing: border-box;
@@ -52,94 +52,6 @@
             display: flex;
             align-items: center;
         }
-        .os-tabs {
-            display: flex;
-            gap: 10px;
-            margin-bottom: 16px;
-        }
-        .os-tab {
-            padding: 10px 20px;
-            border: 2px solid #ddd;
-            border-radius: 8px;
-            cursor: pointer;
-            background: white;
-            font-size: 1em;
-            transition: all 0.2s;
-        }
-        .os-tab:hover {
-            border-color: #4f46e5;
-        }
-        .os-tab.active {
-            background: #4f46e5;
-            color: white;
-            border-color: #4f46e5;
-        }
-        .os-content {
-            display: none;
-        }
-        .os-content.active {
-            display: block;
-        }
-        .config-path {
-            background: #f0f0f0;
-            padding: 12px 16px;
-            border-radius: 8px;
-            font-family: monospace;
-            font-size: 0.9em;
-            margin: 12px 0;
-            word-break: break-all;
-        }
-        .copy-btn {
-            background: #4f46e5;
-            color: white;
-            border: none;
-            padding: 14px 28px;
-            border-radius: 8px;
-            font-size: 1em;
-            cursor: pointer;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            gap: 8px;
-            width: 100%;
-            transition: background 0.2s;
-        }
-        .copy-btn:hover {
-            background: #4338ca;
-        }
-        .copy-btn.copied {
-            background: #22c55e;
-        }
-        .config-preview {
-            background: #1a1a2e;
-            color: #e2e8f0;
-            padding: 16px;
-            border-radius: 8px;
-            font-family: monospace;
-            font-size: 0.85em;
-            overflow-x: auto;
-            margin: 16px 0;
-            white-space: pre;
-        }
-        .warning {
-            background: #fef3c7;
-            border-left: 4px solid #f59e0b;
-            padding: 16px;
-            border-radius: 0 8px 8px 0;
-            margin: 16px 0;
-        }
-        .warning-title {
-            font-weight: 600;
-            color: #92400e;
-            margin-bottom: 8px;
-        }
-        .info {
-            background: #dbeafe;
-            border-left: 4px solid #3b82f6;
-            padding: 16px;
-            border-radius: 0 8px 8px 0;
-            margin: 16px 0;
-        }
         a {
             color: #4f46e5;
         }
@@ -179,85 +91,20 @@
         li {
             margin-bottom: 8px;
         }
+        .info {
+            background: #dbeafe;
+            border-left: 4px solid #3b82f6;
+            padding: 16px;
+            border-radius: 0 8px 8px 0;
+            margin: 16px 0;
+        }
     </style>
 </head>
 <body>
     <h1>NBA Stats for Claude</h1>
     <p class="subtitle">Get real-time NBA scores, player stats, and advanced analytics directly in Claude</p>
 
-    <!-- Easiest Method: Claude.ai Connector -->
-    <div class="card" style="background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%); color: white;">
-        <div class="step-title" style="color: white;">
-            <span style="background: white; color: #4f46e5;" class="step-number">⚡</span>
-            Easiest: Add via Claude.ai (Pro/Max/Team/Enterprise)
-        </div>
-        <p>If you have Claude Pro, Max, Team, or Enterprise, you can add NBA Stats in seconds - no downloads or config files needed!</p>
-
-        <div style="margin-top: 20px; background: rgba(255,255,255,0.15); border-radius: 8px; padding: 16px;">
-            <ol style="margin: 0; padding-left: 20px; font-size: 0.95em; line-height: 1.8;">
-                <li>Go to <a href="https://claude.ai" target="_blank" style="color: white; text-decoration: underline;">claude.ai</a> and sign in</li>
-                <li>Click your <strong>profile icon</strong> (bottom left) → <strong>Settings</strong></li>
-                <li>Click <strong>Connectors</strong> in the left sidebar</li>
-                <li>Click <strong>"Add custom connector"</strong> at the bottom</li>
-                <li>Paste this URL and click <strong>Add</strong>:</li>
-            </ol>
-            <div style="margin-top: 12px; display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
-                <code style="background: rgba(0,0,0,0.3); padding: 10px 14px; border-radius: 6px; font-size: 0.9em; flex: 1; min-width: 200px;">https://nba-stats-remote-mcp-production.up.railway.app/mcp</code>
-                <button onclick="copyURL()" style="background: white; color: #4f46e5; border: none; padding: 10px 16px; border-radius: 6px; cursor: pointer; font-weight: 600; white-space: nowrap;">
-                    <span id="url-copy-text">📋 Copy URL</span>
-                </button>
-            </div>
-            <p style="margin: 16px 0 0 0; font-size: 0.9em; opacity: 0.9;">
-                ✅ That's it! Start a new chat and ask "What were the NBA scores last night?"
-            </p>
-        </div>
-    </div>
-
-    <div style="text-align: center; margin: 20px 0; color: #666;">— Claude Desktop users, see options below —</div>
-
-    <!-- Claude Desktop Quick Install -->
-    <div class="card">
-        <div class="step-title">
-            <span class="step-number">💻</span>
-            Claude Desktop: Quick Install
-        </div>
-        <p>For Claude Desktop (free or paid), download and run the installer:</p>
-        <div style="display: flex; gap: 12px; margin-top: 16px; flex-wrap: wrap;">
-            <a href="install-nba-stats.command" download class="download-btn" style="background: #4f46e5; color: white; padding: 12px 24px; border-radius: 8px; text-decoration: none; font-weight: 600; display: inline-flex; align-items: center; gap: 8px;">
-                🍎 Download for Mac
-            </a>
-            <a href="install-nba-stats.bat" download class="download-btn" style="background: #4f46e5; color: white; padding: 12px 24px; border-radius: 8px; text-decoration: none; font-weight: 600; display: inline-flex; align-items: center; gap: 8px;">
-                🪟 Download for Windows
-            </a>
-        </div>
-        <details style="margin-top: 16px;">
-            <summary style="cursor: pointer; font-weight: 600; color: #4f46e5;">🍎 Mac: How to run the installer</summary>
-            <div style="margin-top: 12px; background: #f8fafc; border-radius: 8px; padding: 16px;">
-                <ol style="margin: 0; padding-left: 20px; font-size: 0.9em; line-height: 1.6;">
-                    <li>Download the file above</li>
-                    <li>Open Finder and go to your Downloads folder</li>
-                    <li><strong>Right-click</strong> (or Control-click) on <code>install-nba-stats.command</code></li>
-                    <li>Select <strong>"Open"</strong> from the menu</li>
-                    <li>When you see "macOS cannot verify the developer" click <strong>"Open"</strong> again</li>
-                    <li>If you see "Apple could not verify..." click <strong>"OK"</strong>, then go to <strong>System Settings → Privacy & Security</strong>, scroll down and click <strong>"Open Anyway"</strong></li>
-                </ol>
-                <p style="margin: 12px 0 0 0; font-size: 0.85em; color: #666;">
-                    ℹ️ This warning appears because the installer isn't signed with an Apple Developer certificate. The script is open source - <a href="https://github.com/goingawa11/nba-stats-remote-mcp/blob/main/docs/install-nba-stats.command" target="_blank">view source code</a>.
-                </p>
-            </div>
-        </details>
-        <details style="margin-top: 8px;">
-            <summary style="cursor: pointer; font-weight: 600; color: #4f46e5;">🪟 Windows: How to run the installer</summary>
-            <div style="margin-top: 12px; background: #f8fafc; border-radius: 8px; padding: 16px;">
-                <p style="margin: 0; font-size: 0.9em;">Double-click the .bat file to run. If Windows SmartScreen appears, click <strong>"More info"</strong> → <strong>"Run anyway"</strong>.</p>
-            </div>
-        </details>
-        <div class="warning" style="margin-top: 16px;">
-            <div class="warning-title">⚠️ Requires Node.js</div>
-            <p style="margin:0">Claude Desktop connectors require Node.js. <a href="https://nodejs.org/" target="_blank">Download it here</a> (choose LTS) if you don't have it installed.</p>
-        </div>
-    </div>
-
+    <!-- Features -->
     <div class="card">
         <div class="features">
             <div class="feature">
@@ -283,111 +130,38 @@
         </div>
     </div>
 
-    <!-- Step 1: Prerequisites -->
-    <div class="card">
-        <div class="step-title">
-            <span class="step-number">1</span>
-            Check Prerequisites
+    <!-- Install Instructions -->
+    <div class="card" style="background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%); color: white;">
+        <div class="step-title" style="color: white;">
+            <span style="background: white; color: #4f46e5;" class="step-number">⚡</span>
+            Add to Claude (Pro/Max/Team/Enterprise)
         </div>
-        <p>You need <strong>Node.js</strong> installed on your computer. This is required to connect Claude Desktop to the NBA Stats server.</p>
+        <p>Add NBA Stats to Claude in seconds - no downloads or config files needed!</p>
 
-        <div class="info">
-            <strong>How to check:</strong> Open Terminal (Mac) or Command Prompt (Windows) and type: <code>node --version</code>
-            <br><br>
-            If you see a version number (like v18.0.0), you're good! If not, <a href="https://nodejs.org/" target="_blank">download Node.js here</a> (choose the LTS version).
-        </div>
-    </div>
-
-    <!-- Step 2: Open Config File -->
-    <div class="card">
-        <div class="step-title">
-            <span class="step-number">2</span>
-            Open Claude Desktop Settings
-        </div>
-
-        <div class="os-tabs">
-            <button class="os-tab active" onclick="showOS('mac')">Mac</button>
-            <button class="os-tab" onclick="showOS('windows')">Windows</button>
-        </div>
-
-        <div id="mac-content" class="os-content active">
-            <ol>
-                <li>Open <strong>Claude Desktop</strong></li>
-                <li>Click <strong>Claude</strong> in the menu bar (top left)</li>
-                <li>Click <strong>Settings...</strong></li>
-                <li>Click <strong>Developer</strong> in the left sidebar</li>
-                <li>Click <strong>Edit Config</strong></li>
+        <div style="margin-top: 20px; background: rgba(255,255,255,0.15); border-radius: 8px; padding: 16px;">
+            <ol style="margin: 0; padding-left: 20px; font-size: 0.95em; line-height: 1.8;">
+                <li>Go to <a href="https://claude.ai" target="_blank" style="color: white; text-decoration: underline;">claude.ai</a> and sign in</li>
+                <li>Click your <strong>profile icon</strong> (bottom left) → <strong>Settings</strong></li>
+                <li>Click <strong>Connectors</strong> in the left sidebar</li>
+                <li>Click <strong>"Add custom connector"</strong> at the bottom</li>
+                <li>Paste this URL and click <strong>Add</strong>:</li>
             </ol>
-            <p>This will open the config file in your default text editor.</p>
-            <div class="config-path">~/Library/Application Support/Claude/claude_desktop_config.json</div>
-        </div>
-
-        <div id="windows-content" class="os-content">
-            <ol>
-                <li>Open <strong>Claude Desktop</strong></li>
-                <li>Click the <strong>☰</strong> menu icon (top left)</li>
-                <li>Click <strong>Settings</strong></li>
-                <li>Click <strong>Developer</strong> in the left sidebar</li>
-                <li>Click <strong>Edit Config</strong></li>
-            </ol>
-            <p>This will open the config file in Notepad.</p>
-            <div class="config-path">%APPDATA%\Claude\claude_desktop_config.json</div>
+            <div style="margin-top: 12px; display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
+                <code style="background: rgba(0,0,0,0.3); padding: 10px 14px; border-radius: 6px; font-size: 0.9em; flex: 1; min-width: 200px;">https://nba-stats-remote-mcp-production.up.railway.app/mcp</code>
+                <button onclick="copyURL()" style="background: white; color: #4f46e5; border: none; padding: 10px 16px; border-radius: 6px; cursor: pointer; font-weight: 600; white-space: nowrap;">
+                    <span id="url-copy-text">📋 Copy URL</span>
+                </button>
+            </div>
         </div>
     </div>
 
-    <!-- Step 3: Add Configuration -->
+    <!-- Try It -->
     <div class="card">
         <div class="step-title">
-            <span class="step-number">3</span>
-            Add the NBA Stats Configuration
-        </div>
-
-        <p>Replace the entire contents of the config file with this:</p>
-
-        <div class="config-preview">{
-  "mcpServers": {
-    "nba-stats": {
-      "command": "npx",
-      "args": [
-        "mcp-remote",
-        "https://nba-stats-remote-mcp-production.up.railway.app/mcp"
-      ]
-    }
-  }
-}</div>
-
-        <button class="copy-btn" onclick="copyConfig()">
-            <span id="copy-icon">📋</span>
-            <span id="copy-text">Copy Configuration</span>
-        </button>
-
-        <div class="warning">
-            <div class="warning-title">Already have other MCP servers?</div>
-            <p style="margin:0">If your config file already has content, just add the <code>"nba-stats": {...}</code> section inside the existing <code>"mcpServers"</code> object. Make sure to add a comma after the previous server entry.</p>
-        </div>
-    </div>
-
-    <!-- Step 4: Restart -->
-    <div class="card">
-        <div class="step-title">
-            <span class="step-number">4</span>
-            Restart Claude Desktop
-        </div>
-        <ol>
-            <li>Save the config file and close it</li>
-            <li>Completely quit Claude Desktop (not just close the window)</li>
-            <li>Reopen Claude Desktop</li>
-        </ol>
-        <p>The first time you use an NBA stats feature, it may take a few seconds to connect.</p>
-    </div>
-
-    <!-- Step 5: Try It -->
-    <div class="card">
-        <div class="step-title">
-            <span class="step-number">5</span>
+            <span class="step-number">✓</span>
             Try It Out!
         </div>
-        <p>Open a new conversation in Claude Desktop and try asking:</p>
+        <p>Start a new conversation in Claude and try asking:</p>
         <ul>
             <li>"What were the NBA scores last night?"</li>
             <li>"How is LeBron James playing this season?"</li>
@@ -399,51 +173,14 @@
     <!-- Troubleshooting -->
     <div class="card">
         <div class="step-title">Troubleshooting</div>
-        <p><strong>Claude isn't using NBA stats:</strong> Make sure you restarted Claude Desktop completely. Try asking specifically: "Use the NBA stats tool to get today's scores."</p>
-        <p><strong>"npx not found" error:</strong> Node.js isn't installed or not in your PATH. Reinstall Node.js from <a href="https://nodejs.org/" target="_blank">nodejs.org</a>.</p>
+        <p><strong>Claude isn't using NBA stats:</strong> Try asking specifically: "Use the NBA stats connector to get today's scores."</p>
         <p><strong>Connection errors:</strong> Check your internet connection. The server may occasionally be restarting - wait a minute and try again.</p>
+        <div class="info">
+            <strong>Need help?</strong> View the <a href="https://github.com/goingawa11/nba-stats-remote-mcp" target="_blank">source code on GitHub</a> or report issues there.
+        </div>
     </div>
 
     <script>
-        function showOS(os) {
-            // Update tabs
-            document.querySelectorAll('.os-tab').forEach(tab => tab.classList.remove('active'));
-            event.target.classList.add('active');
-
-            // Update content
-            document.querySelectorAll('.os-content').forEach(content => content.classList.remove('active'));
-            document.getElementById(os + '-content').classList.add('active');
-        }
-
-        function copyConfig() {
-            const config = `{
-  "mcpServers": {
-    "nba-stats": {
-      "command": "npx",
-      "args": [
-        "mcp-remote",
-        "https://nba-stats-remote-mcp-production.up.railway.app/mcp"
-      ]
-    }
-  }
-}`;
-            navigator.clipboard.writeText(config).then(() => {
-                const btn = document.querySelector('.copy-btn');
-                const icon = document.getElementById('copy-icon');
-                const text = document.getElementById('copy-text');
-
-                btn.classList.add('copied');
-                icon.textContent = '✓';
-                text.textContent = 'Copied!';
-
-                setTimeout(() => {
-                    btn.classList.remove('copied');
-                    icon.textContent = '📋';
-                    text.textContent = 'Copy Configuration';
-                }, 2000);
-            });
-        }
-
         function copyURL() {
             const url = 'https://nba-stats-remote-mcp-production.up.railway.app/mcp';
             navigator.clipboard.writeText(url).then(() => {
