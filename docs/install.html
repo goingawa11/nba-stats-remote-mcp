@@ -182,44 +182,81 @@
     </style>
 </head>
 <body>
-    <h1>NBA Stats for Claude Desktop</h1>
+    <h1>NBA Stats for Claude</h1>
     <p class="subtitle">Get real-time NBA scores, player stats, and advanced analytics directly in Claude</p>
 
-    <!-- Quick Install Option -->
+    <!-- Easiest Method: Claude.ai Connector -->
     <div class="card" style="background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%); color: white;">
         <div class="step-title" style="color: white;">
             <span style="background: white; color: #4f46e5;" class="step-number">⚡</span>
-            Quick Install (Recommended)
+            Easiest: Add via Claude.ai (Pro/Max/Team/Enterprise)
         </div>
-        <p>Download and run the installer for your operating system:</p>
-        <div style="display: flex; gap: 12px; margin-top: 16px; flex-wrap: wrap;">
-            <a href="install-nba-stats.command" download class="download-btn" style="background: white; color: #4f46e5; padding: 12px 24px; border-radius: 8px; text-decoration: none; font-weight: 600; display: inline-flex; align-items: center; gap: 8px;">
-                🍎 Download for Mac
-            </a>
-            <a href="install-nba-stats.bat" download class="download-btn" style="background: white; color: #4f46e5; padding: 12px 24px; border-radius: 8px; text-decoration: none; font-weight: 600; display: inline-flex; align-items: center; gap: 8px;">
-                🪟 Download for Windows
-            </a>
-        </div>
+        <p>If you have Claude Pro, Max, Team, or Enterprise, you can add NBA Stats in seconds - no downloads or config files needed!</p>
+
         <div style="margin-top: 20px; background: rgba(255,255,255,0.15); border-radius: 8px; padding: 16px;">
-            <strong style="display: block; margin-bottom: 8px;">🍎 Mac Instructions:</strong>
-            <ol style="margin: 0; padding-left: 20px; font-size: 0.9em; line-height: 1.6;">
-                <li>Download the file above</li>
-                <li>Open Finder and go to your Downloads folder</li>
-                <li><strong>Right-click</strong> (or Control-click) on <code style="background: rgba(0,0,0,0.2); padding: 2px 6px; border-radius: 4px;">install-nba-stats.command</code></li>
-                <li>Select <strong>"Open"</strong> from the menu</li>
-                <li>When you see "macOS cannot verify the developer" click <strong>"Open"</strong> again</li>
-                <li>If you see "Apple could not verify..." click <strong>"OK"</strong>, then go to <strong>System Settings → Privacy & Security</strong>, scroll down and click <strong>"Open Anyway"</strong></li>
+            <ol style="margin: 0; padding-left: 20px; font-size: 0.95em; line-height: 1.8;">
+                <li>Go to <a href="https://claude.ai" target="_blank" style="color: white; text-decoration: underline;">claude.ai</a> and sign in</li>
+                <li>Click your <strong>profile icon</strong> (bottom left) → <strong>Settings</strong></li>
+                <li>Click <strong>Connectors</strong> in the left sidebar</li>
+                <li>Click <strong>"Add custom connector"</strong> at the bottom</li>
+                <li>Paste this URL and click <strong>Add</strong>:</li>
             </ol>
-            <p style="margin: 12px 0 0 0; font-size: 0.85em; opacity: 0.9;">
-                ℹ️ This warning appears because the installer isn't signed with an Apple Developer certificate. The script is open source and you can <a href="https://github.com/goingawa11/nba-stats-remote-mcp/blob/main/docs/install-nba-stats.command" target="_blank" style="color: white; text-decoration: underline;">view the source code here</a>.
+            <div style="margin-top: 12px; display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
+                <code style="background: rgba(0,0,0,0.3); padding: 10px 14px; border-radius: 6px; font-size: 0.9em; flex: 1; min-width: 200px;">https://nba-stats-remote-mcp-production.up.railway.app/mcp</code>
+                <button onclick="copyURL()" style="background: white; color: #4f46e5; border: none; padding: 10px 16px; border-radius: 6px; cursor: pointer; font-weight: 600; white-space: nowrap;">
+                    <span id="url-copy-text">📋 Copy URL</span>
+                </button>
+            </div>
+            <p style="margin: 16px 0 0 0; font-size: 0.9em; opacity: 0.9;">
+                ✅ That's it! Start a new chat and ask "What were the NBA scores last night?"
             </p>
-        </div>
-        <div style="margin-top: 12px; font-size: 0.9em; opacity: 0.9;">
-            <strong>🪟 Windows users:</strong> Double-click the .bat file to run. If SmartScreen appears, click "More info" → "Run anyway".
         </div>
     </div>
 
-    <div style="text-align: center; margin: 20px 0; color: #666;">— or follow the manual steps below —</div>
+    <div style="text-align: center; margin: 20px 0; color: #666;">— Claude Desktop users, see options below —</div>
+
+    <!-- Claude Desktop Quick Install -->
+    <div class="card">
+        <div class="step-title">
+            <span class="step-number">💻</span>
+            Claude Desktop: Quick Install
+        </div>
+        <p>For Claude Desktop (free or paid), download and run the installer:</p>
+        <div style="display: flex; gap: 12px; margin-top: 16px; flex-wrap: wrap;">
+            <a href="install-nba-stats.command" download class="download-btn" style="background: #4f46e5; color: white; padding: 12px 24px; border-radius: 8px; text-decoration: none; font-weight: 600; display: inline-flex; align-items: center; gap: 8px;">
+                🍎 Download for Mac
+            </a>
+            <a href="install-nba-stats.bat" download class="download-btn" style="background: #4f46e5; color: white; padding: 12px 24px; border-radius: 8px; text-decoration: none; font-weight: 600; display: inline-flex; align-items: center; gap: 8px;">
+                🪟 Download for Windows
+            </a>
+        </div>
+        <details style="margin-top: 16px;">
+            <summary style="cursor: pointer; font-weight: 600; color: #4f46e5;">🍎 Mac: How to run the installer</summary>
+            <div style="margin-top: 12px; background: #f8fafc; border-radius: 8px; padding: 16px;">
+                <ol style="margin: 0; padding-left: 20px; font-size: 0.9em; line-height: 1.6;">
+                    <li>Download the file above</li>
+                    <li>Open Finder and go to your Downloads folder</li>
+                    <li><strong>Right-click</strong> (or Control-click) on <code>install-nba-stats.command</code></li>
+                    <li>Select <strong>"Open"</strong> from the menu</li>
+                    <li>When you see "macOS cannot verify the developer" click <strong>"Open"</strong> again</li>
+                    <li>If you see "Apple could not verify..." click <strong>"OK"</strong>, then go to <strong>System Settings → Privacy & Security</strong>, scroll down and click <strong>"Open Anyway"</strong></li>
+                </ol>
+                <p style="margin: 12px 0 0 0; font-size: 0.85em; color: #666;">
+                    ℹ️ This warning appears because the installer isn't signed with an Apple Developer certificate. The script is open source - <a href="https://github.com/goingawa11/nba-stats-remote-mcp/blob/main/docs/install-nba-stats.command" target="_blank">view source code</a>.
+                </p>
+            </div>
+        </details>
+        <details style="margin-top: 8px;">
+            <summary style="cursor: pointer; font-weight: 600; color: #4f46e5;">🪟 Windows: How to run the installer</summary>
+            <div style="margin-top: 12px; background: #f8fafc; border-radius: 8px; padding: 16px;">
+                <p style="margin: 0; font-size: 0.9em;">Double-click the .bat file to run. If Windows SmartScreen appears, click <strong>"More info"</strong> → <strong>"Run anyway"</strong>.</p>
+            </div>
+        </details>
+        <div class="warning" style="margin-top: 16px;">
+            <div class="warning-title">⚠️ Requires Node.js</div>
+            <p style="margin:0">Claude Desktop connectors require Node.js. <a href="https://nodejs.org/" target="_blank">Download it here</a> (choose LTS) if you don't have it installed.</p>
+        </div>
+    </div>
 
     <div class="card">
         <div class="features">
@@ -403,6 +440,17 @@
                     btn.classList.remove('copied');
                     icon.textContent = '📋';
                     text.textContent = 'Copy Configuration';
+                }, 2000);
+            });
+        }
+
+        function copyURL() {
+            const url = 'https://nba-stats-remote-mcp-production.up.railway.app/mcp';
+            navigator.clipboard.writeText(url).then(() => {
+                const text = document.getElementById('url-copy-text');
+                text.textContent = '✓ Copied!';
+                setTimeout(() => {
+                    text.textContent = '📋 Copy URL';
                 }, 2000);
             });
         }
