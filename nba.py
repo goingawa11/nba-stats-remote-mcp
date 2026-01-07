@@ -94,6 +94,7 @@ For SCORES:
 
 For PLAYER STATS:
 - get_player_game_log(player_name) - Recent game-by-game stats for a player
+- get_player_game_log_with_matchups(player_name, opponent_position) - Game log WITH opposing players' stats (efficient for matchup analysis)
 - get_player_season_stats(player_name) - Season averages and totals
 - get_league_leaders(stat) - League leaders for any stat with filters
 
@@ -102,6 +103,7 @@ For TEAM STATS:
 
 For GAME DETAILS:
 - get_box_score(game_id) - Full box score (get game_id from scores tools first)
+- get_box_scores_batch(game_ids) - Multiple box scores in one call (efficient for analyzing multiple games)
 - get_play_by_play(game_id) - Play-by-play data for a game
 
 Query received: {query}
@@ -490,6 +492,191 @@ async def get_box_score(game_id: str) -> list:
         return results
     except Exception as e:
         return [{"error": f"Failed to get box score: {str(e)}"}]
+
+
+@mcp.tool()
+async def get_box_scores_batch(game_ids: list[str], players_filter: list[str] = None, position_filter: str = None) -> dict:
+    """[NBA STATS - BATCH] Get box scores for MULTIPLE games in a single call.
+
+    USE THIS for efficiency when you need box scores from several games (e.g., analyzing matchups across a player's game log).
+
+    Args:
+        game_ids: List of NBA game IDs (e.g., ['0022500460', '0022500445', '0022500430'])
+        players_filter: Optional list of player names to include (filters results to only these players)
+        position_filter: Optional position to filter by ('C', 'F', 'G') - useful for "opposing centers" queries
+
+    Returns: Dictionary with game_id as keys, each containing the box score for that game.
+
+    Example use case: Get LeBron's game log, then batch fetch all box scores to find opposing centers' stats."""
+    results = {}
+
+    for game_id in game_ids:
+        try:
+            box = boxscoretraditionalv3.BoxScoreTraditionalV3(game_id=game_id)
+            data = box.get_dict()
+
+            if 'boxScoreTraditional' not in data:
+                results[game_id] = {"error": f"No box score data found"}
+                continue
+
+            bs = data['boxScoreTraditional']
+            game_players = []
+
+            for team_key in ['homeTeam', 'awayTeam']:
+                team = bs[team_key]
+                team_tricode = team['teamTricode']
+                team_city = team['teamCity']
+
+                for player in team['players']:
+                    stats = player.get('statistics', {})
+                    minutes = stats.get('minutes', 'PT0M0.00S')
+                    if minutes == 'PT0M0.00S' or not minutes:
+                        continue
+
+                    player_name = f"{player['firstName']} {player['familyName']}"
+                    player_position = player.get('position', '')
+
+                    # Apply filters
+                    if players_filter and player_name not in players_filter:
+                        continue
+                    if position_filter and position_filter.upper() not in player_position.upper():
+                        continue
+
+                    # Parse minutes
+                    if minutes.startswith('PT'):
+                        try:
+                            minutes = minutes[2:]
+                            if 'M' in minutes:
+                                mins, rest = minutes.split('M')
+                                secs = rest.replace('S', '').split('.')[0]
+                                minutes = f"{mins}:{secs.zfill(2)}"
+                            else:
+                                minutes = "0:00"
+                        except:
+                            pass
+
+                    game_players.append({
+                        'player': player_name,
+                        'team': team_tricode,
+                        'team_city': team_city,
+                        'position': player_position,
+                        'min': minutes,
+                        'pts': stats.get('points', 0),
+                        'reb': stats.get('reboundsTotal', 0),
+                        'ast': stats.get('assists', 0),
+                        'stl': stats.get('steals', 0),
+                        'blk': stats.get('blocks', 0),
+                        'tov': stats.get('turnovers', 0),
+                        'plus_minus': stats.get('plusMinusPoints', 0),
+                        'fg': f"{stats.get('fieldGoalsMade', 0)}-{stats.get('fieldGoalsAttempted', 0)}",
+                        'fg_pct': round(stats.get('fieldGoalsPercentage', 0), 3),
+                    })
+
+            results[game_id] = game_players
+        except Exception as e:
+            results[game_id] = {"error": str(e)}
+
+    return results
+
+
+@mcp.tool()
+async def get_player_game_log_with_matchups(
+    player_name: str,
+    num_games: int = 10,
+    season: str = '2025-26',
+    opponent_position: str = None
+) -> list:
+    """[NBA STATS - ENRICHED] Get a player's game log WITH opposing player stats in a single call.
+
+    MORE EFFICIENT than separate calls - fetches game log and all relevant box scores together.
+
+    Args:
+        player_name: Player's full name (e.g., 'LeBron James')
+        num_games: Number of recent games (default 10)
+        season: Season in YYYY-YY format (default '2025-26')
+        opponent_position: Filter opposing players by position ('C', 'F', 'G') - e.g., 'C' for opposing centers
+
+    Returns: Game log with each game enriched with opposing team's player stats (optionally filtered by position)."""
+
+    # First get the player's game log
+    player_matches = players.find_players_by_full_name(player_name)
+    if not player_matches:
+        return [{"error": f"Player '{player_name}' not found"}]
+
+    player_id = player_matches[0]['id']
+    player_full_name = player_matches[0]['full_name']
+
+    gamelog = playergamelog.PlayerGameLog(player_id=player_id, season=season)
+    df = gamelog.get_data_frames()[0]
+
+    if df.empty:
+        return [{"error": f"No games found for {player_full_name} in {season}"}]
+
+    df = df.head(num_games)
+
+    # Get the player's team abbreviation to identify opponents
+    results = []
+
+    for _, row in df.iterrows():
+        game_id = row['Game_ID']
+        player_team = row['MATCHUP'].split()[0]  # e.g., "LAL" from "LAL vs. BOS"
+
+        # Fetch box score for this game
+        try:
+            box = boxscoretraditionalv3.BoxScoreTraditionalV3(game_id=game_id)
+            data = box.get_dict()
+
+            opponent_players = []
+            if 'boxScoreTraditional' in data:
+                bs = data['boxScoreTraditional']
+
+                for team_key in ['homeTeam', 'awayTeam']:
+                    team = bs[team_key]
+                    # Skip if this is the player's team
+                    if team['teamTricode'] == player_team:
+                        continue
+
+                    for opp_player in team['players']:
+                        stats = opp_player.get('statistics', {})
+                        minutes = stats.get('minutes', 'PT0M0.00S')
+                        if minutes == 'PT0M0.00S' or not minutes:
+                            continue
+
+                        opp_position = opp_player.get('position', '')
+
+                        # Filter by position if specified
+                        if opponent_position and opponent_position.upper() not in opp_position.upper():
+                            continue
+
+                        opponent_players.append({
+                            'name': f"{opp_player['firstName']} {opp_player['familyName']}",
+                            'position': opp_position,
+                            'pts': stats.get('points', 0),
+                            'reb': stats.get('reboundsTotal', 0),
+                            'ast': stats.get('assists', 0),
+                            'blk': stats.get('blocks', 0),
+                        })
+        except:
+            opponent_players = []
+
+        results.append({
+            'game_id': game_id,
+            'date': row['GAME_DATE'],
+            'matchup': row['MATCHUP'],
+            'result': row['WL'],
+            'player': player_full_name,
+            'pts': int(row['PTS']),
+            'reb': int(row['REB']),
+            'ast': int(row['AST']),
+            'stl': int(row['STL']),
+            'blk': int(row['BLK']),
+            'min': row['MIN'],
+            'plus_minus': row['PLUS_MINUS'],
+            'opponent_players': opponent_players
+        })
+
+    return results
+
 
 @mcp.tool()
 async def get_team_stats(
