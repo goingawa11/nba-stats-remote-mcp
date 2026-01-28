@@ -1153,6 +1153,8 @@ async def get_lineup_stats(
     - "Show me Celtics 5-man combinations"
     - "Which Warriors lineups have the best net rating?"
     """
+    import time
+
     try:
         # Get team ID from abbreviation
         team_info = teams.find_team_by_abbreviation(team.upper())
@@ -1160,13 +1162,24 @@ async def get_lineup_stats(
             return [{"error": f"Team '{team}' not found"}]
         team_id = team_info['id']
 
-        lineups = leaguedashlineups.LeagueDashLineups(
-            team_id_nullable=team_id,
-            season=season,
-            measure_type_detailed_defense='Advanced',
-            group_quantity=5
-        )
-        df = lineups.get_data_frames()[0]
+        # Retry logic for NBA API timeouts
+        max_retries = 3
+        for attempt in range(max_retries):
+            try:
+                lineups = leaguedashlineups.LeagueDashLineups(
+                    team_id_nullable=team_id,
+                    season=season,
+                    measure_type_detailed_defense='Advanced',
+                    group_quantity=5,
+                    timeout=60
+                )
+                df = lineups.get_data_frames()[0]
+                break
+            except Exception as e:
+                if attempt < max_retries - 1:
+                    time.sleep(2)  # Wait before retry
+                    continue
+                raise e
 
         if df.empty:
             return [{"error": f"No lineup data found for {team} in {season}"}]
@@ -1232,8 +1245,21 @@ async def get_lineup_shifts(
     - "What % of shifts does this lineup outscore opponents?"
     - "Which opponents does this lineup struggle against?"
     """
+    import time
+
     if len(player_names) != 5:
         return {"error": "Must specify exactly 5 players for lineup analysis"}
+
+    def api_call_with_retry(func, max_retries=3, delay=2):
+        """Helper to retry API calls on timeout"""
+        for attempt in range(max_retries):
+            try:
+                return func()
+            except Exception as e:
+                if attempt < max_retries - 1 and 'timeout' in str(e).lower():
+                    time.sleep(delay)
+                    continue
+                raise e
 
     try:
         # Step 1: Get player IDs and find games where all 5 played
@@ -1248,7 +1274,9 @@ async def get_lineup_shifts(
             pid = player_match[0]['id']
             player_ids[name] = pid
             target_lineup_ids.add(pid)
-            gamelog = playergamelog.PlayerGameLog(player_id=pid, season=season)
+            gamelog = api_call_with_retry(
+                lambda p=pid: playergamelog.PlayerGameLog(player_id=p, season=season, timeout=60)
+            )
             df = gamelog.get_data_frames()[0]
             player_games[name] = set(df['Game_ID'].tolist())
 
@@ -1293,7 +1321,9 @@ async def get_lineup_shifts(
         for game_id in common_games:
             try:
                 # Get box score for player names and home/away
-                box = boxscoretraditionalv3.BoxScoreTraditionalV3(game_id=game_id)
+                box = api_call_with_retry(
+                    lambda gid=game_id: boxscoretraditionalv3.BoxScoreTraditionalV3(game_id=gid, timeout=60)
+                )
                 data = box.get_dict()
                 bs = data['boxScoreTraditional']
 
@@ -1312,7 +1342,9 @@ async def get_lineup_shifts(
                 starters = set(p['personId'] for p in team_data['players'] if p.get('position'))
 
                 # Parse play-by-play
-                pbp = live_playbyplay.PlayByPlay(game_id)
+                pbp = api_call_with_retry(
+                    lambda gid=game_id: live_playbyplay.PlayByPlay(gid)
+                )
                 actions = pbp.get_dict()['game']['actions']
 
                 current_lineup = starters.copy()
