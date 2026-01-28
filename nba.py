@@ -103,8 +103,8 @@ For TEAM STATS:
 
 For LINEUP ANALYSIS:
 - get_lineup_stats(team) - Quick aggregated stats for team's lineup combinations (~5 sec)
-- get_lineup_stints(team, player_names) - DETAILED per-stint data for specific 5-man lineup (~30-60 sec)
-  Use this for "% of stints positive", "performance by opponent", etc.
+- get_lineup_shifts(team, player_names) - DETAILED per-shift data for specific 5-man lineup (~30-60 sec)
+  Use this for "% of shifts positive", "performance by opponent", etc.
 
 For GAME DETAILS:
 - get_box_score(game_id) - Full box score (get game_id from scores tools first)
@@ -1145,8 +1145,8 @@ async def get_lineup_stats(
 
     Returns: Lineup combinations with games played, minutes, offensive/defensive/net rating, pace.
 
-    Note: For detailed per-stint analysis (% of stints positive, by opponent, etc.),
-    use get_lineup_stints which provides granular stint-level data.
+    Note: For detailed per-shift analysis (% of shifts positive, by opponent, etc.),
+    use get_lineup_shifts which provides granular shift-level data.
 
     Example use cases:
     - "What are the Lakers' best lineups?"
@@ -1204,18 +1204,18 @@ async def get_lineup_stats(
 
 
 @mcp.tool()
-async def get_lineup_stints(
+async def get_lineup_shifts(
     team: str,
     player_names: list[str],
     season: str = '2025-26'
 ) -> dict:
-    """[NBA STATS - ADVANCED] Get detailed per-stint data for a specific 5-man lineup.
+    """[NBA STATS - ADVANCED] Get detailed per-shift data for a specific 5-man lineup.
 
-    SLOWER (~30-60 seconds) - Derives stint data from play-by-play. Returns raw stint-level
-    data for follow-up analysis like "% of stints positive", "performance by opponent", etc.
+    SLOWER (~30-60 seconds) - Derives shift data from play-by-play. Returns raw shift-level
+    data for follow-up analysis like "% of shifts positive", "performance by opponent", etc.
 
     This tool will fetch play-by-play for all games where the specified players played together,
-    then extract every stint where exactly those 5 players were on the court.
+    then extract every shift where exactly those 5 players were on the court.
 
     Args:
         team: Team abbreviation (e.g., 'LAL', 'BOS', 'GSW')
@@ -1223,13 +1223,13 @@ async def get_lineup_stints(
         season: Season in YYYY-YY format (default '2025-26')
 
     Returns: Dictionary with:
-        - summary: Aggregated stats (total stints, % positive, total +/-)
+        - summary: Aggregated stats (total shifts, % positive, total +/-)
         - by_opponent: Stats broken down by opponent
-        - stints: Raw list of every stint with game_id, date, opponent, period, duration, +/-
+        - shifts: Raw list of every shift with game_id, date, opponent, period, duration, +/-
 
     Example use cases:
-    - "How does the Lakers starting lineup perform on a per-stint basis?"
-    - "What % of stints does this lineup outscore opponents?"
+    - "How does the Lakers starting lineup perform on a per-shift basis?"
+    - "What % of shifts does this lineup outscore opponents?"
     - "Which opponents does this lineup struggle against?"
     """
     if len(player_names) != 5:
@@ -1274,7 +1274,7 @@ async def get_lineup_stints(
 
         # Step 2: Process play-by-play for each game
         player_name_map = {}
-        all_stints = []
+        all_shifts = []
         target_lineup_frozenset = frozenset(target_lineup_ids)
         games_processed = 0
         errors = []
@@ -1316,10 +1316,10 @@ async def get_lineup_stints(
                 actions = pbp.get_dict()['game']['actions']
 
                 current_lineup = starters.copy()
-                stint_start_score_team = 0
-                stint_start_score_opp = 0
-                stint_start_period = 1
-                stint_start_clock = 'PT12M00.00S'
+                shift_start_score_team = 0
+                shift_start_score_opp = 0
+                shift_start_period = 1
+                shift_start_clock = 'PT12M00.00S'
 
                 for action in actions:
                     if action.get('teamTricode') == team_abbrev and action.get('actionType') == 'substitution':
@@ -1328,25 +1328,25 @@ async def get_lineup_stints(
                         score_team = score_home if is_home else score_away
                         score_opp = score_away if is_home else score_home
 
-                        # Only save stints for our target lineup
+                        # Only save shifts for our target lineup
                         if frozenset(current_lineup) == target_lineup_frozenset:
                             end_clock = action.get('clock', 'PT00M00.00S')
-                            duration = parse_clock(stint_start_clock) - parse_clock(end_clock)
+                            duration = parse_clock(shift_start_clock) - parse_clock(end_clock)
 
-                            stint = {
+                            shift = {
                                 'game_id': game_id,
                                 'game_date': game_date,
                                 'opponent': opponent,
                                 'is_home': is_home,
-                                'period': stint_start_period,
+                                'period': shift_start_period,
                                 'duration_secs': max(0, duration),
-                                'plus_minus': (score_team - stint_start_score_team) - (score_opp - stint_start_score_opp),
-                                'team_pts_scored': score_team - stint_start_score_team,
-                                'team_pts_allowed': score_opp - stint_start_score_opp
+                                'plus_minus': (score_team - shift_start_score_team) - (score_opp - shift_start_score_opp),
+                                'team_pts_scored': score_team - shift_start_score_team,
+                                'team_pts_allowed': score_opp - shift_start_score_opp
                             }
 
-                            if duration > 0 or stint['plus_minus'] != 0:
-                                all_stints.append(stint)
+                            if duration > 0 or shift['plus_minus'] != 0:
+                                all_shifts.append(shift)
 
                         # Update lineup
                         if action.get('subType') == 'out':
@@ -1354,10 +1354,10 @@ async def get_lineup_stints(
                         elif action.get('subType') == 'in':
                             current_lineup.add(action.get('personId'))
 
-                        stint_start_score_team = score_team
-                        stint_start_score_opp = score_opp
-                        stint_start_period = action.get('period')
-                        stint_start_clock = action.get('clock')
+                        shift_start_score_team = score_team
+                        shift_start_score_opp = score_opp
+                        shift_start_period = action.get('period')
+                        shift_start_clock = action.get('clock')
 
                 games_processed += 1
 
@@ -1365,41 +1365,41 @@ async def get_lineup_stints(
                 errors.append(f"Game {game_id}: {str(e)}")
                 continue
 
-        if not all_stints:
+        if not all_shifts:
             return {
-                "error": "No stints found for this lineup",
+                "error": "No shifts found for this lineup",
                 "games_checked": len(common_games),
                 "games_processed": games_processed,
                 "errors": errors[:5] if errors else None
             }
 
         # Build summary stats
-        positive_stints = sum(1 for s in all_stints if s['plus_minus'] > 0)
-        negative_stints = sum(1 for s in all_stints if s['plus_minus'] < 0)
-        even_stints = sum(1 for s in all_stints if s['plus_minus'] == 0)
-        total_pm = sum(s['plus_minus'] for s in all_stints)
-        total_duration = sum(s['duration_secs'] for s in all_stints)
+        positive_shifts = sum(1 for s in all_shifts if s['plus_minus'] > 0)
+        negative_shifts = sum(1 for s in all_shifts if s['plus_minus'] < 0)
+        even_shifts = sum(1 for s in all_shifts if s['plus_minus'] == 0)
+        total_pm = sum(s['plus_minus'] for s in all_shifts)
+        total_duration = sum(s['duration_secs'] for s in all_shifts)
 
         # Stats by opponent
         opp_stats = {}
-        for stint in all_stints:
-            opp = stint['opponent']
+        for shift in all_shifts:
+            opp = shift['opponent']
             if opp not in opp_stats:
-                opp_stats[opp] = {'stints': 0, 'plus_minus': 0, 'positive': 0, 'negative': 0}
-            opp_stats[opp]['stints'] += 1
-            opp_stats[opp]['plus_minus'] += stint['plus_minus']
-            if stint['plus_minus'] > 0:
+                opp_stats[opp] = {'shifts': 0, 'plus_minus': 0, 'positive': 0, 'negative': 0}
+            opp_stats[opp]['shifts'] += 1
+            opp_stats[opp]['plus_minus'] += shift['plus_minus']
+            if shift['plus_minus'] > 0:
                 opp_stats[opp]['positive'] += 1
-            elif stint['plus_minus'] < 0:
+            elif shift['plus_minus'] < 0:
                 opp_stats[opp]['negative'] += 1
 
         # Sort opponents by plus/minus
         by_opponent = []
         for opp, stats in sorted(opp_stats.items(), key=lambda x: x[1]['plus_minus']):
-            pct_positive = (stats['positive'] / stats['stints'] * 100) if stats['stints'] > 0 else 0
+            pct_positive = (stats['positive'] / stats['shifts'] * 100) if stats['shifts'] > 0 else 0
             by_opponent.append({
                 'opponent': opp,
-                'stints': stats['stints'],
+                'shifts': stats['shifts'],
                 'plus_minus': stats['plus_minus'],
                 'pct_positive': round(pct_positive, 0)
             })
@@ -1408,21 +1408,21 @@ async def get_lineup_stints(
             'lineup': [player_name_map.get(pid, str(pid)) for pid in target_lineup_ids],
             'games_analyzed': games_processed,
             'summary': {
-                'total_stints': len(all_stints),
-                'positive_stints': positive_stints,
-                'negative_stints': negative_stints,
-                'even_stints': even_stints,
-                'pct_positive': round(positive_stints / len(all_stints) * 100, 1) if all_stints else 0,
+                'total_shifts': len(all_shifts),
+                'positive_shifts': positive_shifts,
+                'negative_shifts': negative_shifts,
+                'even_shifts': even_shifts,
+                'pct_positive': round(positive_shifts / len(all_shifts) * 100, 1) if all_shifts else 0,
                 'total_plus_minus': total_pm,
                 'total_duration_mins': round(total_duration / 60, 1)
             },
             'by_opponent': by_opponent,
-            'stints': all_stints,
+            'shifts': all_shifts,
             'errors': errors[:5] if errors else None
         }
 
     except Exception as e:
-        return {"error": f"Failed to get lineup stints: {str(e)}"}
+        return {"error": f"Failed to get lineup shifts: {str(e)}"}
 
 
 if __name__ == "__main__":
