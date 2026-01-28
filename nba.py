@@ -1,7 +1,7 @@
 from typing import Any
 from fastmcp import FastMCP
-from nba_api.stats.endpoints import scoreboardv2, boxscoretraditionalv3, boxscorefourfactorsv2, playbyplayv2, leaguegamefinder, playergamelog, playercareerstats, leaguedashplayerstats, leaguedashteamstats
-from nba_api.stats.static import players
+from nba_api.stats.endpoints import scoreboardv2, boxscoretraditionalv3, boxscorefourfactorsv2, playbyplayv2, leaguegamefinder, playergamelog, playercareerstats, leaguedashplayerstats, leaguedashteamstats, leaguedashlineups
+from nba_api.stats.static import players, teams
 from nba_api.live.nba.endpoints import scoreboard as live_scoreboard, playbyplay as live_playbyplay
 import pandas as pd
 
@@ -100,6 +100,11 @@ For PLAYER STATS:
 
 For TEAM STATS:
 - get_team_stats() - Team rankings by offensive/defensive rating, pace, etc.
+
+For LINEUP ANALYSIS:
+- get_lineup_stats(team) - Quick aggregated stats for team's lineup combinations (~5 sec)
+- get_lineup_stints(team, player_names) - DETAILED per-stint data for specific 5-man lineup (~30-60 sec)
+  Use this for "% of stints positive", "performance by opponent", etc.
 
 For GAME DETAILS:
 - get_box_score(game_id) - Full box score (get game_id from scores tools first)
@@ -1119,6 +1124,305 @@ async def get_player_splits(
         result['splits']['by_month'] = month_splits
 
     return result
+
+
+@mcp.tool()
+async def get_lineup_stats(
+    team: str,
+    season: str = '2025-26',
+    min_minutes: int = 20,
+    top_n: int = 15
+) -> list:
+    """[NBA STATS - OFFICIAL DATA] Get aggregated stats for a team's lineup combinations.
+
+    FAST (~5 seconds) - Uses NBA's official lineup endpoint for pre-computed stats.
+
+    Args:
+        team: Team abbreviation (e.g., 'LAL', 'BOS', 'GSW')
+        season: Season in YYYY-YY format (default '2025-26')
+        min_minutes: Minimum minutes played to include lineup (default 20)
+        top_n: Number of lineups to return, sorted by minutes (default 15)
+
+    Returns: Lineup combinations with games played, minutes, offensive/defensive/net rating, pace.
+
+    Note: For detailed per-stint analysis (% of stints positive, by opponent, etc.),
+    use get_lineup_stints which provides granular stint-level data.
+
+    Example use cases:
+    - "What are the Lakers' best lineups?"
+    - "Show me Celtics 5-man combinations"
+    - "Which Warriors lineups have the best net rating?"
+    """
+    try:
+        # Get team ID from abbreviation
+        team_info = teams.find_team_by_abbreviation(team.upper())
+        if not team_info:
+            return [{"error": f"Team '{team}' not found"}]
+        team_id = team_info['id']
+
+        lineups = leaguedashlineups.LeagueDashLineups(
+            team_id_nullable=team_id,
+            season=season,
+            measure_type_detailed_defense='Advanced',
+            group_quantity=5
+        )
+        df = lineups.get_data_frames()[0]
+
+        if df.empty:
+            return [{"error": f"No lineup data found for {team} in {season}"}]
+
+        # Filter by minimum minutes
+        df = df[df['MIN'] >= min_minutes]
+
+        if df.empty:
+            return [{"error": f"No lineups found with {min_minutes}+ minutes for {team}"}]
+
+        # Sort by minutes and take top N
+        df = df.nlargest(top_n, 'MIN')
+
+        results = []
+        for _, row in df.iterrows():
+            results.append({
+                'lineup': row['GROUP_NAME'],
+                'gp': int(row['GP']),
+                'min': round(row['MIN'], 1),
+                'off_rating': round(row['OFF_RATING'], 1),
+                'def_rating': round(row['DEF_RATING'], 1),
+                'net_rating': round(row['NET_RATING'], 1),
+                'pace': round(row['PACE'], 1),
+                'ts_pct': round(row['TS_PCT'], 3),
+                'efg_pct': round(row['EFG_PCT'], 3),
+                'ast_pct': round(row['AST_PCT'], 3),
+                'tov_pct': round(row['TM_TOV_PCT'], 3),
+                'oreb_pct': round(row['OREB_PCT'], 3),
+                'dreb_pct': round(row['DREB_PCT'], 3)
+            })
+
+        return results
+    except Exception as e:
+        return [{"error": f"Failed to get lineup stats: {str(e)}"}]
+
+
+@mcp.tool()
+async def get_lineup_stints(
+    team: str,
+    player_names: list[str],
+    season: str = '2025-26'
+) -> dict:
+    """[NBA STATS - ADVANCED] Get detailed per-stint data for a specific 5-man lineup.
+
+    SLOWER (~30-60 seconds) - Derives stint data from play-by-play. Returns raw stint-level
+    data for follow-up analysis like "% of stints positive", "performance by opponent", etc.
+
+    This tool will fetch play-by-play for all games where the specified players played together,
+    then extract every stint where exactly those 5 players were on the court.
+
+    Args:
+        team: Team abbreviation (e.g., 'LAL', 'BOS', 'GSW')
+        player_names: List of exactly 5 player full names (e.g., ['LeBron James', 'Luka Doncic', ...])
+        season: Season in YYYY-YY format (default '2025-26')
+
+    Returns: Dictionary with:
+        - summary: Aggregated stats (total stints, % positive, total +/-)
+        - by_opponent: Stats broken down by opponent
+        - stints: Raw list of every stint with game_id, date, opponent, period, duration, +/-
+
+    Example use cases:
+    - "How does the Lakers starting lineup perform on a per-stint basis?"
+    - "What % of stints does this lineup outscore opponents?"
+    - "Which opponents does this lineup struggle against?"
+    """
+    if len(player_names) != 5:
+        return {"error": "Must specify exactly 5 players for lineup analysis"}
+
+    try:
+        # Step 1: Get player IDs and find games where all 5 played
+        player_games = {}
+        player_ids = {}
+        target_lineup_ids = set()
+
+        for name in player_names:
+            player_match = players.find_players_by_full_name(name)
+            if not player_match:
+                return {"error": f"Player '{name}' not found"}
+            pid = player_match[0]['id']
+            player_ids[name] = pid
+            target_lineup_ids.add(pid)
+            gamelog = playergamelog.PlayerGameLog(player_id=pid, season=season)
+            df = gamelog.get_data_frames()[0]
+            player_games[name] = set(df['Game_ID'].tolist())
+
+        # Find intersection - games where all 5 played
+        common_games = list(set.intersection(*player_games.values()))
+
+        if not common_games:
+            return {"error": f"No games found where all 5 players played together in {season}"}
+
+        # Get team ID
+        team_info = teams.find_team_by_abbreviation(team.upper())
+        if not team_info:
+            return {"error": f"Team '{team}' not found"}
+        team_abbrev = team.upper()
+
+        # Get game metadata
+        games_df = leaguegamefinder.LeagueGameFinder(
+            date_from_nullable='10/01/2025',
+            date_to_nullable='06/30/2026',
+            league_id_nullable='00'
+        ).get_data_frames()[0]
+        team_games = games_df[games_df['TEAM_ABBREVIATION'] == team_abbrev]
+
+        # Step 2: Process play-by-play for each game
+        player_name_map = {}
+        all_stints = []
+        target_lineup_frozenset = frozenset(target_lineup_ids)
+        games_processed = 0
+        errors = []
+
+        def parse_clock(clock_str):
+            if not clock_str or not clock_str.startswith('PT'):
+                return 0
+            try:
+                clock_str = clock_str[2:]
+                mins, rest = clock_str.split('M')
+                secs = float(rest.replace('S', ''))
+                return int(mins) * 60 + secs
+            except:
+                return 0
+
+        for game_id in common_games:
+            try:
+                # Get box score for player names and home/away
+                box = boxscoretraditionalv3.BoxScoreTraditionalV3(game_id=game_id)
+                data = box.get_dict()
+                bs = data['boxScoreTraditional']
+
+                is_home = bs['homeTeam']['teamTricode'] == team_abbrev
+                team_data = bs['homeTeam'] if is_home else bs['awayTeam']
+                opp_team = bs['awayTeam'] if is_home else bs['homeTeam']
+
+                game_row = team_games[team_games['GAME_ID'] == game_id]
+                game_date = game_row.iloc[0]['GAME_DATE'] if len(game_row) > 0 else 'Unknown'
+                opponent = opp_team['teamTricode']
+
+                for player in team_data['players']:
+                    player_name_map[player['personId']] = f"{player['firstName']} {player['familyName']}"
+
+                # Get starters
+                starters = set(p['personId'] for p in team_data['players'] if p.get('position'))
+
+                # Parse play-by-play
+                pbp = live_playbyplay.PlayByPlay(game_id)
+                actions = pbp.get_dict()['game']['actions']
+
+                current_lineup = starters.copy()
+                stint_start_score_team = 0
+                stint_start_score_opp = 0
+                stint_start_period = 1
+                stint_start_clock = 'PT12M00.00S'
+
+                for action in actions:
+                    if action.get('teamTricode') == team_abbrev and action.get('actionType') == 'substitution':
+                        score_home = int(action.get('scoreHome', 0))
+                        score_away = int(action.get('scoreAway', 0))
+                        score_team = score_home if is_home else score_away
+                        score_opp = score_away if is_home else score_home
+
+                        # Only save stints for our target lineup
+                        if frozenset(current_lineup) == target_lineup_frozenset:
+                            end_clock = action.get('clock', 'PT00M00.00S')
+                            duration = parse_clock(stint_start_clock) - parse_clock(end_clock)
+
+                            stint = {
+                                'game_id': game_id,
+                                'game_date': game_date,
+                                'opponent': opponent,
+                                'is_home': is_home,
+                                'period': stint_start_period,
+                                'duration_secs': max(0, duration),
+                                'plus_minus': (score_team - stint_start_score_team) - (score_opp - stint_start_score_opp),
+                                'team_pts_scored': score_team - stint_start_score_team,
+                                'team_pts_allowed': score_opp - stint_start_score_opp
+                            }
+
+                            if duration > 0 or stint['plus_minus'] != 0:
+                                all_stints.append(stint)
+
+                        # Update lineup
+                        if action.get('subType') == 'out':
+                            current_lineup.discard(action.get('personId'))
+                        elif action.get('subType') == 'in':
+                            current_lineup.add(action.get('personId'))
+
+                        stint_start_score_team = score_team
+                        stint_start_score_opp = score_opp
+                        stint_start_period = action.get('period')
+                        stint_start_clock = action.get('clock')
+
+                games_processed += 1
+
+            except Exception as e:
+                errors.append(f"Game {game_id}: {str(e)}")
+                continue
+
+        if not all_stints:
+            return {
+                "error": "No stints found for this lineup",
+                "games_checked": len(common_games),
+                "games_processed": games_processed,
+                "errors": errors[:5] if errors else None
+            }
+
+        # Build summary stats
+        positive_stints = sum(1 for s in all_stints if s['plus_minus'] > 0)
+        negative_stints = sum(1 for s in all_stints if s['plus_minus'] < 0)
+        even_stints = sum(1 for s in all_stints if s['plus_minus'] == 0)
+        total_pm = sum(s['plus_minus'] for s in all_stints)
+        total_duration = sum(s['duration_secs'] for s in all_stints)
+
+        # Stats by opponent
+        opp_stats = {}
+        for stint in all_stints:
+            opp = stint['opponent']
+            if opp not in opp_stats:
+                opp_stats[opp] = {'stints': 0, 'plus_minus': 0, 'positive': 0, 'negative': 0}
+            opp_stats[opp]['stints'] += 1
+            opp_stats[opp]['plus_minus'] += stint['plus_minus']
+            if stint['plus_minus'] > 0:
+                opp_stats[opp]['positive'] += 1
+            elif stint['plus_minus'] < 0:
+                opp_stats[opp]['negative'] += 1
+
+        # Sort opponents by plus/minus
+        by_opponent = []
+        for opp, stats in sorted(opp_stats.items(), key=lambda x: x[1]['plus_minus']):
+            pct_positive = (stats['positive'] / stats['stints'] * 100) if stats['stints'] > 0 else 0
+            by_opponent.append({
+                'opponent': opp,
+                'stints': stats['stints'],
+                'plus_minus': stats['plus_minus'],
+                'pct_positive': round(pct_positive, 0)
+            })
+
+        return {
+            'lineup': [player_name_map.get(pid, str(pid)) for pid in target_lineup_ids],
+            'games_analyzed': games_processed,
+            'summary': {
+                'total_stints': len(all_stints),
+                'positive_stints': positive_stints,
+                'negative_stints': negative_stints,
+                'even_stints': even_stints,
+                'pct_positive': round(positive_stints / len(all_stints) * 100, 1) if all_stints else 0,
+                'total_plus_minus': total_pm,
+                'total_duration_mins': round(total_duration / 60, 1)
+            },
+            'by_opponent': by_opponent,
+            'stints': all_stints,
+            'errors': errors[:5] if errors else None
+        }
+
+    except Exception as e:
+        return {"error": f"Failed to get lineup stints: {str(e)}"}
 
 
 if __name__ == "__main__":
