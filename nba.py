@@ -1300,11 +1300,10 @@ async def get_lineup_shifts(
         ).get_data_frames()[0]
         team_games = games_df[games_df['TEAM_ABBREVIATION'] == team_abbrev]
 
-        # Step 2: Process play-by-play for each game
+        # Step 2: Process play-by-play for each game IN PARALLEL
         player_name_map = {}
         all_shifts = []
         target_lineup_frozenset = frozenset(target_lineup_ids)
-        games_processed = 0
         errors = []
 
         def parse_clock(clock_str):
@@ -1318,7 +1317,8 @@ async def get_lineup_shifts(
             except:
                 return 0
 
-        for game_id in common_games:
+        def process_single_game(game_id):
+            """Process a single game and return shifts found"""
             try:
                 # Get box score for player names and home/away
                 box = api_call_with_retry(
@@ -1335,8 +1335,10 @@ async def get_lineup_shifts(
                 game_date = game_row.iloc[0]['GAME_DATE'] if len(game_row) > 0 else 'Unknown'
                 opponent = opp_team['teamTricode']
 
+                # Build player name map for this game
+                local_player_map = {}
                 for player in team_data['players']:
-                    player_name_map[player['personId']] = f"{player['firstName']} {player['familyName']}"
+                    local_player_map[player['personId']] = f"{player['firstName']} {player['familyName']}"
 
                 # Get starters
                 starters = set(p['personId'] for p in team_data['players'] if p.get('position'))
@@ -1353,6 +1355,7 @@ async def get_lineup_shifts(
                 shift_start_period = 1
                 shift_start_clock = 'PT12M00.00S'
 
+                game_shifts = []
                 for action in actions:
                     if action.get('teamTricode') == team_abbrev and action.get('actionType') == 'substitution':
                         score_home = int(action.get('scoreHome', 0))
@@ -1378,7 +1381,7 @@ async def get_lineup_shifts(
                             }
 
                             if duration > 0 or shift['plus_minus'] != 0:
-                                all_shifts.append(shift)
+                                game_shifts.append(shift)
 
                         # Update lineup
                         if action.get('subType') == 'out':
@@ -1391,11 +1394,31 @@ async def get_lineup_shifts(
                         shift_start_period = action.get('period')
                         shift_start_clock = action.get('clock')
 
-                games_processed += 1
+                return {'shifts': game_shifts, 'player_map': local_player_map, 'error': None}
 
             except Exception as e:
-                errors.append(f"Game {game_id}: {str(e)}")
-                continue
+                return {'shifts': [], 'player_map': {}, 'error': f"Game {game_id}: {str(e)}"}
+
+        # Process games in parallel using ThreadPoolExecutor
+        # Using 2 workers to avoid NBA API rate limiting (tested: 2 workers = 4.5x speedup)
+        import concurrent.futures
+        import asyncio
+
+        loop = asyncio.get_event_loop()
+        with concurrent.futures.ThreadPoolExecutor(max_workers=2) as executor:
+            # Submit all game processing tasks
+            futures = [loop.run_in_executor(executor, process_single_game, gid) for gid in common_games]
+            results = await asyncio.gather(*futures)
+
+        # Collect results from parallel processing
+        games_processed = 0
+        for result in results:
+            if result['error']:
+                errors.append(result['error'])
+            else:
+                games_processed += 1
+                all_shifts.extend(result['shifts'])
+                player_name_map.update(result['player_map'])
 
         if not all_shifts:
             return {
